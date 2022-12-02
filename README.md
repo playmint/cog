@@ -1,8 +1,12 @@
 # COG
 
+## Status
+
+> this framework is experimental and under heavy active development. **It is not suitable for general use just yet.** 
+
 ## Overview
 
-COG is a solidity framework for building composable Community Owned Games.
+COG is a framework for building composable Community Owned Games.
 
 ## Concepts
 
