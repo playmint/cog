@@ -17,6 +17,17 @@ error SessionExpired();
 
 contract SessionRouter is Router {
 
+    event SessionCreate(
+        address session,
+        address owner,
+        uint32 exp,
+        uint32 scopes
+    );
+
+    event SessionDestroy(
+        address session
+    );
+
     uint constant MAX_TTL = 40000;
 
     struct Session {
@@ -35,12 +46,13 @@ contract SessionRouter is Router {
         uint32 scopes,
         address addr
     ) public {
-        sessions[addr] = Session({
-            dispatcher: dispatcher,
-            owner: msg.sender,
-            exp: expires(ttl),
-            scopes: scopes
-        });
+        _authorizeAddr(
+            dispatcher,
+            ttl,
+            scopes,
+            addr,
+            msg.sender
+        );
     }
 
     // authorizeKey delegates permissions to key to act as the signer of v/r/s when talking to dispatcher
@@ -57,12 +69,39 @@ contract SessionRouter is Router {
             AUTHEN_MESSAGE,
             addr
         )) , v, r, s);
-        sessions[addr] = Session({
+        if (owner == address(0)) {
+            revert SessionUnauthorized();
+        }
+        _authorizeAddr(
+            dispatcher,
+            ttl,
+            scopes,
+            addr,
+            owner
+        );
+    }
+
+    function _authorizeAddr(
+        Dispatcher dispatcher,
+        uint32 ttl,
+        uint32 scopes,
+        address sessionAddr,
+        address ownerAddr
+    ) internal {
+        uint32 exp = expires(ttl);
+        sessions[sessionAddr] = Session({
             dispatcher: dispatcher,
-            owner: owner,
-            exp: expires(ttl),
-            scopes: scopes
+            exp: exp,
+            scopes: scopes,
+            owner: ownerAddr
         });
+        emit SessionCreate(
+            sessionAddr,
+            ownerAddr,
+            exp,
+            scopes
+        );
+
     }
 
     // revokeKey expires the session key, requires msg.sender to be owner of the session
@@ -74,6 +113,7 @@ contract SessionRouter is Router {
             revert SessionUnauthorized();
         }
         delete sessions[addr];
+        emit SessionDestroy(addr);
     }
 
     // revokeKey expires the session key, requires signer of v/r/s to be session owner
@@ -133,7 +173,8 @@ contract SessionRouter is Router {
         // TODO: replay protection
         Context memory ctx = Context({
             sender: session.owner,
-            scopes: session.scopes
+            scopes: session.scopes,
+            clock: uint32(block.number)
         });
         // forward to the dispatcher registered with the session
         session.dispatcher.dispatch(action, ctx);

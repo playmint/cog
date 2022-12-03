@@ -20,9 +20,9 @@ import {
     REVOKE_MESSAGE
 } from "../src/SessionRouter.sol";
 
-import "./utils/TestActions.sol";
-import "./utils/TestRules.sol";
-import "./utils/TestStateUtils.sol";
+import "./fixtures/TestActions.sol";
+import "./fixtures/TestRules.sol";
+import "./fixtures/TestStateUtils.sol";
 using StateTestUtils for State;
 
 import { LibString } from "solmate/utils/LibString.sol";
@@ -64,6 +64,16 @@ contract SessionRouterTest is Test {
         assertFalse(relayAddr == ownerAddr);
     }
 
+    function testUnauthorizeSignerAsOwner() public {
+        // should not be able to just sign actions with any old key
+        vm.expectRevert(SessionUnauthorized.selector);
+        dispatchSigned(0x666);
+        assertEq(
+            state.getAddress(),
+            address(0)
+        );
+    }
+
     function testAuthorizeAddrWithSenderAsOwner() public {
         // authorize a session key by talking direct to
         // contract as sender
@@ -73,7 +83,6 @@ contract SessionRouterTest is Test {
         // should now be able to use sessionKey to submit signed actions
         // that act as the original owner
         dispatchSigned(sessionKey);
-
         assertEq(
             state.getAddress(),
             ownerAddr
@@ -98,7 +107,6 @@ contract SessionRouterTest is Test {
 
         // should now be able to use sessionKey to act as owner
         dispatchSigned(sessionKey);
-
         assertEq(
             state.getAddress(),
             ownerAddr

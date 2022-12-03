@@ -13,9 +13,9 @@ import {
 import {State, NodeTypeUtils, NodeType, NodeData} from "../src/State.sol";
 import {StateGraph} from "../src/StateGraph.sol";
 
-import "./utils/TestActions.sol";
-import "./utils/TestRules.sol";
-import "./utils/TestStateUtils.sol";
+import "./fixtures/TestActions.sol";
+import "./fixtures/TestRules.sol";
+import "./fixtures/TestStateUtils.sol";
 using StateTestUtils for State;
 
 contract ExampleDispatcher is Dispatcher, BaseDispatcher {
@@ -77,7 +77,7 @@ contract BaseDispatcherTest is Test {
 
         d.registerRouter(router);
 
-        Context memory ctx = Context({ sender: sender, scopes: 0 });
+        Context memory ctx = Context({ sender: sender, scopes: 0, clock: uint32(block.number) });
         bytes memory action = abi.encodeCall(TestActions.SET_SENDER, ());
 
         d.registerRule(new LogSenderRule());
@@ -94,7 +94,7 @@ contract BaseDispatcherTest is Test {
         address router = vm.addr(0x88888);
         address sender = vm.addr(0x11111);
 
-        Context memory ctx = Context({ sender: sender, scopes: 0 });
+        Context memory ctx = Context({ sender: sender, scopes: 0, clock: uint32(block.number) });
         bytes memory action = abi.encodeCall(TestActions.SET_SENDER, ());
 
         d.registerRule(new LogSenderRule());

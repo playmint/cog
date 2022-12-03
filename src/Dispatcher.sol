@@ -34,9 +34,15 @@ struct Action {
 // uint32 SCOPE_WRITE_SENSITIVE = 0x2;
 uint32 constant SCOPE_FULL_ACCESS = 0xffff;
 
+// Context is metadata that is submitted with the action
+// it contains:
+// - the sender (address of player who initiated action)
+// - scopes (a uint32 intended to be used as role/auth bitwise flags)
 struct Context {
     address sender; // action sender
-    uint32 scopes; // authorized scopes
+    uint32 scopes;  // authorized scopes
+    uint32 clock;   // block at time of action commit
+    // uint32 ?? - there's a little bit of room left
 }
 
 // ActionArgDef describes the parameters for an action.
@@ -96,7 +102,8 @@ interface Dispatcher {
     function getActionID(string memory) external returns (address);
 }
 
-// Routers accept "signed" Actions,
+// Routers accept "signed" Actions and forwards them to Dispatcher.dispatch
+// They might be a seperate contract or an extension of the Dispatcher
 interface Router {
     function dispatch(
         bytes calldata action,
@@ -115,10 +122,12 @@ interface Rule {
 
     // getActionTypeDefs returns metadata about the actions this rule uses
     // it can be used for introspection by clients to discover available actions
-    function getActionTypeDefs() external view returns (ActionTypeDef[] memory);
+    // TODO: this stuff requires codegen which we don't have in cog yet :(
+    // function getActionTypeDefs() external view returns (ActionTypeDef[] memory);
 
     // getNodeTypeDefs returns metadata about the node types this rule uses
     // it can be used for introspection of nodetype and edgetype ids
+    // TODO: this stuff requires codegen which we don't have in cog yet :(
     // function getNodeTypeDefs() external view returns (NodeTypeDef[] memory);
 }
 
@@ -150,24 +159,26 @@ abstract contract BaseDispatcher is Dispatcher {
     function registerRule(Rule rule) public {
         rules.push() = rule;
         // register all the actions this rule uses
-        ActionTypeDef[] memory defs = rule.getActionTypeDefs();
-        for (uint i=0; i<defs.length; i++) {
-            registerAction(defs[i]);
-        }
+        // TODO: requires the codegen bits
+        // ActionTypeDef[] memory defs = rule.getActionTypeDefs();
+        // for (uint i=0; i<defs.length; i++) {
+        //     registerAction(defs[i]);
+        // }
     }
 
     // TODO: this should be an owneronly func
-    function registerAction(ActionTypeDef memory def) public {
-        address id = actionAddrs[def.name];
-        if (id == def.id) { // already set
-            return;
-        } else if (id != address(0)) { // two actions same name
-            revert ActionNameConflict();
-        }
-        actionAddrs[def.name] = def.id;
-        actionDefs.push() = def;
-        emit ActionRegistered(def.id, def.name);
-    }
+    // TODO: requires the codegen bits
+    // function registerAction(ActionTypeDef memory def) public {
+    //     address id = actionAddrs[def.name];
+    //     if (id == def.id) { // already set
+    //         return;
+    //     } else if (id != address(0)) { // two actions same name
+    //         revert ActionNameConflict();
+    //     }
+    //     actionAddrs[def.name] = def.id;
+    //     actionDefs.push() = def;
+    //     emit ActionRegistered(def.id, def.name);
+    // }
 
     // registerRouter(r) will implicitly trust the Context data submitted
     // by r to dispatch(action, ctx) calls.
@@ -204,9 +215,9 @@ abstract contract BaseDispatcher is Dispatcher {
     }
 
     function dispatch(bytes calldata action, Context calldata ctx) public {
-        // check sender is trusted
-        // we trust sessions built from ourself see the dispatch(action) function above that builds a full-access session for the msg.sender
-        // we trust sessions built from any registered routers
+        // check ctx can be trusted
+        // we trust ctx built from ourself see the dispatch(action) function above that builds a full-access session for the msg.sender
+        // we trust ctx built from any registered routers
         if (!isRegisteredRouter(msg.sender)) {
             revert DispatchUntrustedSender();
         }
@@ -222,7 +233,8 @@ abstract contract BaseDispatcher is Dispatcher {
     ) public {
         Context memory ctx = Context({
             sender: msg.sender,
-            scopes: SCOPE_FULL_ACCESS
+            scopes: SCOPE_FULL_ACCESS,
+            clock: uint32(block.number)
         });
         this.dispatch(action, ctx);
     }

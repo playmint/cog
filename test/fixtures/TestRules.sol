@@ -20,9 +20,6 @@ contract LastWriteWinsRule is Rule {
     function reduce(State s, bytes calldata /*action*/, Context calldata /*ctx*/) public returns (State) {
         return s.set(b);
     }
-    function getActionTypeDefs() public pure returns (ActionTypeDef[] memory defs) {
-        return defs;
-    }
 }
 
 contract SetBytesRule is Rule {
@@ -33,9 +30,6 @@ contract SetBytesRule is Rule {
         }
         return s;
     }
-    function getActionTypeDefs() public pure returns (ActionTypeDef[] memory defs) {
-        return defs;
-    }
 }
 
 contract LogSenderRule is Rule {
@@ -44,9 +38,6 @@ contract LogSenderRule is Rule {
             s = s.set(ctx.sender);
         }
         return s;
-    }
-    function getActionTypeDefs() public pure returns (ActionTypeDef[] memory defs) {
-        return defs;
     }
 }
 
