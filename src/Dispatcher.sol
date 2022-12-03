@@ -26,10 +26,17 @@ enum ActionArgKind {
 }
 
 struct Action {
-    address owner; // who sent this action
     address id;    // address of ActionType
     bytes args;  // encoded payload, ActionType can decode
-    uint256 block;  // when did this action arrive
+}
+
+// const SCOPE_READ_SENSITIVE = 0x1;
+// uint32 SCOPE_WRITE_SENSITIVE = 0x2;
+uint32 constant SCOPE_FULL_ACCESS = 0xffff;
+
+struct Context {
+    address sender; // action sender
+    uint32 scopes; // authorized scopes
 }
 
 // ActionArgDef describes the parameters for an action.
@@ -57,20 +64,44 @@ interface ActionType {
     function getTypeDef() external view returns (ActionTypeDef memory);
 }
 
+// Dispatchers accept Actions and execute Rules to modify State
 interface Dispatcher {
     event ActionRegistered(
         address id,
         string name
     );
     event ActionDispatched(
-        address indexed accountID,
-        address indexed actionID,
+        address indexed sender,
         bytes32 actionNonce
     );
 
-    function dispatch(Action memory action) external;
+    // dispatch(action, session) applies action with the supplied session
+    // to the rules.
+    // - action is the abi encoded action + arguments
+    // - session is contains data about the action sender
+    // session data should be considered untrusted and implementations MUST
+    // verify the session data or the sender before executing Rules.
+    function dispatch(
+        bytes calldata action,
+        Context calldata ctx
+    ) external;
+
+    // same as dispatch above, but ctx is built from msg.sender
+    function dispatch(
+        bytes calldata action
+    ) external;
+
     function getActionTypeDefs() external returns (ActionTypeDef[] memory);
+
     function getActionID(string memory) external returns (address);
+}
+
+// Routers accept "signed" Actions,
+interface Router {
+    function dispatch(
+        bytes calldata action,
+        uint8 v, bytes32 r, bytes32 s // sig
+    ) external;
 }
 
 interface Rule {
@@ -80,7 +111,7 @@ interface Rule {
     // ideally they would be pure functions, but it is impractical
     // for solidity/gas/storage reasons to implement state in this kind of way
     // so instead we ask that you think of it as pure even if it's not
-    function reduce(State state, Action memory action) external returns (State);
+    function reduce(State state, bytes calldata action, Context calldata ctx) external returns (State);
 
     // getActionTypeDefs returns metadata about the actions this rule uses
     // it can be used for introspection by clients to discover available actions
@@ -92,6 +123,7 @@ interface Rule {
 }
 
 error ActionNameConflict();
+error DispatchUntrustedSender();
 
 // BaseDispatcher implements some basic structure around registering ActionTypes
 // and Rules and executing those rules in the defined order against a given State
@@ -103,6 +135,7 @@ error ActionNameConflict();
 // TODO:
 // * need way to remove, reorder or clear the rulesets
 abstract contract BaseDispatcher is Dispatcher {
+    mapping(address => bool) private trustedRouters;
     mapping(string => address) private actionAddrs;
     ActionTypeDef[] private actionDefs;
     Rule[] private rules;
@@ -110,9 +143,11 @@ abstract contract BaseDispatcher is Dispatcher {
 
     constructor(State s) {
         gameState = s;
+        registerRouter(address(this));
     }
 
-    function registerRule(Rule rule) internal {
+    // TODO: this should be an owneronly func
+    function registerRule(Rule rule) public {
         rules.push() = rule;
         // register all the actions this rule uses
         ActionTypeDef[] memory defs = rule.getActionTypeDefs();
@@ -121,7 +156,8 @@ abstract contract BaseDispatcher is Dispatcher {
         }
     }
 
-    function registerAction(ActionTypeDef memory def) internal {
+    // TODO: this should be an owneronly func
+    function registerAction(ActionTypeDef memory def) public {
         address id = actionAddrs[def.name];
         if (id == def.id) { // already set
             return;
@@ -133,33 +169,64 @@ abstract contract BaseDispatcher is Dispatcher {
         emit ActionRegistered(def.id, def.name);
     }
 
+    // registerRouter(r) will implicitly trust the Context data submitted
+    // by r to dispatch(action, ctx) calls.
+    //
+    // this is useful if there is an external contract managing authN, authZ
+    // or when using a "session key" pattern like the SessionRouter.
+    //
+    // TODO: this should be an owneronly func
+    function registerRouter(address r) public {
+        trustedRouters[r] = true;
+    }
+
+    function isRegisteredRouter(address r) internal view returns (bool) {
+        return trustedRouters[r];
+    }
+
+    // getActionTypeDefs returns type metadata about the actions this Dispatcher
+    // can process.
     function getActionTypeDefs() public view returns (ActionTypeDef[] memory defs) {
         return actionDefs;
     }
 
+    // getActionID - I want to get rid of this!
     function getActionID(string memory name) public view returns (address) {
         return actionAddrs[name];
     }
 
-    function reduce(State state, Action memory action) internal returns (State) {
+    // reduce applies the action+ctx to all the rules
+    function reduce(State state, bytes calldata action, Context calldata ctx) internal returns (State) {
         for (uint i=0; i<rules.length; i++) {
-            state = rules[i].reduce(state, action);
+            state = rules[i].reduce(state, action, ctx);
         }
         return state;
     }
 
-    // You there, implement this:
-    // function dispatch(Action memory action) public {
-    //     _dispatch(action);
-    // }
-
-    function _dispatch(Action memory action) internal {
-        gameState = reduce(gameState, action);
+    function dispatch(bytes calldata action, Context calldata ctx) public {
+        // check sender is trusted
+        // we trust sessions built from ourself see the dispatch(action) function above that builds a full-access session for the msg.sender
+        // we trust sessions built from any registered routers
+        if (!isRegisteredRouter(msg.sender)) {
+            revert DispatchUntrustedSender();
+        }
+        gameState = reduce(gameState, action, ctx);
         emit ActionDispatched(
-            address(action.owner),
-            action.id,
+            address(ctx.sender),
             "<nonce>" // TODO: unique ids, nonces, and replay protection
         );
     }
 
+    function dispatch(
+        bytes calldata action
+    ) public {
+        Context memory ctx = Context({
+            sender: msg.sender,
+            scopes: SCOPE_FULL_ACCESS
+        });
+        this.dispatch(action, ctx);
+    }
+
 }
+
+
