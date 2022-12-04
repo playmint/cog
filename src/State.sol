@@ -65,9 +65,6 @@ type NodeData is uint256;
 // NodeTypeID is an address to a contract that implements NodeType
 type NodeTypeID is address;
 
-// EdgeTypeID is an address to a contract that implments EdgeType
-type EdgeTypeID is address;
-
 // NodeTypeDef is an introspection type
 // struct NodeTypeDef {
 //     string name; // a friendly human readable name, not used internaly
@@ -120,12 +117,6 @@ interface EdgeType {
     function getAttributes(NodeID srcNodeID, uint idx) external view returns (Attribute[] memory attrs);
 }
 
-library EdgeTypeUtils {
-    function ID(EdgeType kind) internal pure returns (EdgeTypeID) {
-        return EdgeTypeID.wrap(address(kind));
-    }
-}
-
 interface State {
 
     event NodeSet(
@@ -134,7 +125,7 @@ interface State {
     );
 
     event EdgeSet(
-        EdgeTypeID kind,
+        EdgeType kind,
         NodeID srcNodeID,
         NodeID dstNodeID,
         uint idx,
@@ -143,12 +134,12 @@ interface State {
 
     function getNode(NodeID nodeID) external view returns (NodeData);
     function setNode(NodeID id, NodeData data) external returns (State);
-    function setEdge(EdgeTypeID t, NodeID srcNodeID, uint idx, EdgeData memory data) external returns (State);
-    function setEdge(EdgeTypeID t, NodeID srcNodeID, EdgeData memory data) external returns (State);
-    function appendEdge(EdgeTypeID t, NodeID srcNodeID, EdgeData memory data) external returns (State);
-    function getEdge(EdgeTypeID t, NodeID srcNodeID, uint idx) external view returns (EdgeData memory);
-    function getEdge(EdgeTypeID t, NodeID srcNodeID) external view returns (EdgeData memory edge);
-    function getEdges(EdgeTypeID t, NodeID srcNodeID) external view returns (EdgeData[] memory);
+    function setEdge(EdgeType t, NodeID srcNodeID, uint idx, EdgeData memory data) external returns (State);
+    function setEdge(EdgeType t, NodeID srcNodeID, EdgeData memory data) external returns (State);
+    function appendEdge(EdgeType t, NodeID srcNodeID, EdgeData memory data) external returns (State);
+    function getEdge(EdgeType t, NodeID srcNodeID, uint idx) external view returns (EdgeData memory);
+    function getEdge(EdgeType t, NodeID srcNodeID) external view returns (EdgeData memory edge);
+    function getEdges(EdgeType t, NodeID srcNodeID) external view returns (EdgeData[] memory);
     function getNodeAttributes(NodeID, NodeData) external view returns (Attribute[] memory);
     function getEdgeAttributes(EdgeType, NodeID, uint) external view returns (Attribute[] memory);
 }

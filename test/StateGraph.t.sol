@@ -9,8 +9,6 @@ import {
     NodeData,
     EdgeType,
     EdgeData,
-    EdgeTypeID,
-    EdgeTypeUtils,
     NodeType,
     NodeIDUtils,
     NodeTypeID,
@@ -20,7 +18,6 @@ import {
 import {StateGraph} from "../src/StateGraph.sol";
 
 using NodeTypeUtils for NodeType;
-using EdgeTypeUtils for EdgeType;
 using NodeIDUtils for NodeID;
 
 contract Thing is NodeType {
@@ -49,7 +46,7 @@ contract StateGraphTest is Test {
     );
 
     event EdgeSet(
-        EdgeTypeID kind,
+        EdgeType kind,
         NodeID srcNodeID,
         NodeID dstNodeID,
         uint idx,
@@ -91,19 +88,19 @@ contract StateGraphTest is Test {
 
         vm.expectEmit(true, true, true, true, address(g));
         emit EdgeSet(
-            hasOne.ID(),
+            hasOne,
             nodeA,
             nodeB,
             0,            // idx
             uint32(65000) // weight
         );
 
-        g.setEdge(hasOne.ID(), nodeA, EdgeData({
+        g.setEdge(hasOne, nodeA, EdgeData({
             nodeID: nodeB,
             weight: 65000
         }));
 
-        EdgeData memory outEdge = g.getEdge(hasOne.ID(), nodeA);
+        EdgeData memory outEdge = g.getEdge(hasOne, nodeA);
 
         assertEq(
             NodeID.unwrap(outEdge.nodeID),
@@ -123,20 +120,20 @@ contract StateGraphTest is Test {
 
             vm.expectEmit(true, true, true, true, address(g));
             emit EdgeSet(
-                hasOne.ID(),
+                hasOne,
                 nodeA,
                 nodeB,
                 i,        // idx
                 uint32(i) // weight
             );
 
-            g.appendEdge(hasOne.ID(), nodeA, EdgeData({
+            g.appendEdge(hasOne, nodeA, EdgeData({
                 nodeID: nodeB,
                 weight: uint32(i)
             }));
         }
 
-        EdgeData[] memory outEdges = g.getEdges(hasOne.ID(), nodeA);
+        EdgeData[] memory outEdges = g.getEdges(hasOne, nodeA);
 
         for (uint32 i=0; i<3; i++) {
             NodeID nodeB = thing.ID(i);

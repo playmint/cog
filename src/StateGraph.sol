@@ -6,7 +6,7 @@ import {
     State,
     NodeData,
     EdgeData,
-    EdgeTypeID,
+    EdgeType,
     EdgeType,
     NodeIDUtils,
     NodeTypeID,
@@ -17,7 +17,7 @@ import {
 contract StateGraph is State {
 
     mapping(NodeID => NodeData) nodes;
-    mapping(NodeID => mapping(EdgeTypeID => EdgeData[])) edges;
+    mapping(NodeID => mapping(EdgeType => EdgeData[])) edges;
 
     using NodeIDUtils for NodeID;
 
@@ -42,7 +42,7 @@ contract StateGraph is State {
         return this;
     }
 
-    function setEdge(EdgeTypeID t, NodeID srcNodeID, uint idx, EdgeData memory data) public returns (State) {
+    function setEdge(EdgeType t, NodeID srcNodeID, uint idx, EdgeData memory data) public returns (State) {
         if (edges[srcNodeID][t].length == idx) {
             edges[srcNodeID][t].push() = data;
         } else {
@@ -59,27 +59,27 @@ contract StateGraph is State {
     }
 
     // setEdge without index. Use when you know there is only ever a single edge of the given type.
-    function setEdge(EdgeTypeID t, NodeID srcNodeID, EdgeData memory data) public returns (State) {
+    function setEdge(EdgeType t, NodeID srcNodeID, EdgeData memory data) public returns (State) {
         return setEdge(t, srcNodeID, uint(0), data);
     }
 
     // appendEdge performs a setEdge at the end of the list.
-    function appendEdge(EdgeTypeID t, NodeID srcNodeID, EdgeData memory data) public returns (State) {
+    function appendEdge(EdgeType t, NodeID srcNodeID, EdgeData memory data) public returns (State) {
         return setEdge(t, srcNodeID, uint(edges[srcNodeID][t].length), data);
     }
 
-    function getEdge(EdgeTypeID t, NodeID srcNodeID, uint idx) public view returns (EdgeData memory) {
+    function getEdge(EdgeType t, NodeID srcNodeID, uint idx) public view returns (EdgeData memory) {
         return edges[srcNodeID][t][idx];
     }
 
-    function getEdge(EdgeTypeID t, NodeID srcNodeID) public view returns (EdgeData memory edge) {
+    function getEdge(EdgeType t, NodeID srcNodeID) public view returns (EdgeData memory edge) {
         if (edges[srcNodeID][t].length == 0) {
             return edge;
         }
         return edges[srcNodeID][t][0];
     }
 
-    function getEdges(EdgeTypeID t, NodeID srcNodeID) public view returns (EdgeData[] memory) {
+    function getEdges(EdgeType t, NodeID srcNodeID) public view returns (EdgeData[] memory) {
         return edges[srcNodeID][t];
     }
 
