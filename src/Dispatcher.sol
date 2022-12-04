@@ -25,11 +25,6 @@ enum ActionArgKind {
     ENUM
 }
 
-struct Action {
-    address id;    // address of ActionType
-    bytes args;  // encoded payload, ActionType can decode
-}
-
 // const SCOPE_READ_SENSITIVE = 0x1;
 // uint32 SCOPE_WRITE_SENSITIVE = 0x2;
 uint32 constant SCOPE_FULL_ACCESS = 0xffff;
