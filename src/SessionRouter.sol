@@ -4,7 +4,7 @@ pragma solidity ^0.8.13;
 import { State } from "./State.sol";
 import { Context, Router, Dispatcher } from "./Dispatcher.sol";
 
-import { LibString } from "solmate/utils/LibString.sol";
+import { LibString } from "../src/utils/LibString.sol";
 using { LibString.toString } for uint256;
 
 bytes constant PREFIX_MESSAGE = "\x19Ethereum Signed Message:\n";

@@ -24,7 +24,7 @@ import "./fixtures/TestRules.sol";
 import "./fixtures/TestStateUtils.sol";
 using StateTestUtils for State;
 
-import { LibString } from "solmate/utils/LibString.sol";
+import { LibString } from "../src/utils/LibString.sol";
 using { LibString.toString } for uint256;
 
 contract ExampleDispatcher is Dispatcher, BaseDispatcher {
