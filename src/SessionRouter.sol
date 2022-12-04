@@ -180,6 +180,17 @@ contract SessionRouter is Router {
         session.dispatcher.dispatch(action, ctx);
     }
 
+    // dispatch (batched)
+    // TODO: make batched dispach a optional interface of Router not just a special case on SessionRouter
+    function dispatch(
+        bytes[] calldata actions,
+        uint8[] calldata vs, bytes32[] calldata rs, bytes32[] calldata ss
+    ) public {
+        for (uint i=0; i<actions.length; i++) {
+            dispatch(actions[i], vs[i], rs[i], ss[i]);
+        }
+    }
+
     // expires converts a ttl to a future block number
     // reverts if requested ttl "too long"
     function expires(uint32 ttl) internal view returns (uint32) {
