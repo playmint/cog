@@ -45,31 +45,6 @@ struct Context {
     // uint32 ?? - there's a little bit of room left
 }
 
-// ActionArgDef describes the parameters for an action.
-// The kind references an abi.encode type that is expected
-// to be used to encode the args.
-struct ActionArgDef {
-    string name;
-    bool required;
-    ActionArgKind kind;
-}
-
-// ActionTypeDef describes the parameters this action expects
-// and the kinds that it expects them to be abi.encoded to
-// action names must be unique within the scope of the Dispatcher
-struct ActionTypeDef {
-    string name;
-    address id;
-    ActionArgDef arg0; // TODO: support dynamic number of args
-    ActionArgDef arg1; //       instead of this fixed list of 4
-    ActionArgDef arg2;
-    ActionArgDef arg3;
-}
-
-interface ActionType {
-    function getTypeDef() external view returns (ActionTypeDef memory);
-}
-
 // Dispatchers accept Actions and execute Rules to modify State
 interface Dispatcher {
     event ActionRegistered(
@@ -96,10 +71,6 @@ interface Dispatcher {
     function dispatch(
         bytes calldata action
     ) external;
-
-    function getActionTypeDefs() external returns (ActionTypeDef[] memory);
-
-    function getActionID(string memory) external returns (address);
 }
 
 // Routers accept "signed" Actions and forwards them to Dispatcher.dispatch
@@ -119,19 +90,8 @@ interface Rule {
     // for solidity/gas/storage reasons to implement state in this kind of way
     // so instead we ask that you think of it as pure even if it's not
     function reduce(State state, bytes calldata action, Context calldata ctx) external returns (State);
-
-    // getActionTypeDefs returns metadata about the actions this rule uses
-    // it can be used for introspection by clients to discover available actions
-    // TODO: this stuff requires codegen which we don't have in cog yet :(
-    // function getActionTypeDefs() external view returns (ActionTypeDef[] memory);
-
-    // getNodeTypeDefs returns metadata about the node types this rule uses
-    // it can be used for introspection of nodetype and edgetype ids
-    // TODO: this stuff requires codegen which we don't have in cog yet :(
-    // function getNodeTypeDefs() external view returns (NodeTypeDef[] memory);
 }
 
-error ActionNameConflict();
 error DispatchUntrustedSender();
 
 // BaseDispatcher implements some basic structure around registering ActionTypes
@@ -146,7 +106,6 @@ error DispatchUntrustedSender();
 contract BaseDispatcher is Dispatcher {
     mapping(address => bool) private trustedRouters;
     mapping(string => address) private actionAddrs;
-    ActionTypeDef[] private actionDefs;
     Rule[] private rules;
     State private gameState;
 
@@ -158,27 +117,7 @@ contract BaseDispatcher is Dispatcher {
     // TODO: this should be an owneronly func
     function registerRule(Rule rule) public {
         rules.push() = rule;
-        // register all the actions this rule uses
-        // TODO: requires the codegen bits
-        // ActionTypeDef[] memory defs = rule.getActionTypeDefs();
-        // for (uint i=0; i<defs.length; i++) {
-        //     registerAction(defs[i]);
-        // }
     }
-
-    // TODO: this should be an owneronly func
-    // TODO: requires the codegen bits
-    // function registerAction(ActionTypeDef memory def) public {
-    //     address id = actionAddrs[def.name];
-    //     if (id == def.id) { // already set
-    //         return;
-    //     } else if (id != address(0)) { // two actions same name
-    //         revert ActionNameConflict();
-    //     }
-    //     actionAddrs[def.name] = def.id;
-    //     actionDefs.push() = def;
-    //     emit ActionRegistered(def.id, def.name);
-    // }
 
     // registerRouter(r) will implicitly trust the Context data submitted
     // by r to dispatch(action, ctx) calls.
@@ -193,17 +132,6 @@ contract BaseDispatcher is Dispatcher {
 
     function isRegisteredRouter(address r) internal view returns (bool) {
         return trustedRouters[r];
-    }
-
-    // getActionTypeDefs returns type metadata about the actions this Dispatcher
-    // can process.
-    function getActionTypeDefs() public view returns (ActionTypeDef[] memory defs) {
-        return actionDefs;
-    }
-
-    // getActionID - I want to get rid of this!
-    function getActionID(string memory name) public view returns (address) {
-        return actionAddrs[name];
     }
 
     // reduce applies the action+ctx to all the rules

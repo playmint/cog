@@ -17,18 +17,12 @@ Actions are the user _intent_.
 
 Conceptually they are the log of user intent, practically they a just an immutable id and definition of arguments (like a function signature).
 
-We define them in solidity as a contract that implements the `ActionType` interface:
+We define them in solidity as an interface, but we never implement the interface, we are using it as a declaration only.
 
 ```solidity
-contract SpawnCharacter is ActionType {
+interface MyActions {
 
-    function getTypeDef() external view returns (ActionTypeDef memory def) {
-        def.name = "SPAWN_CHAPACTER";
-        def.id = address(this);
-        def.arg0.name = "characterID";
-        def.arg0.required = true;
-        def.arg0.kind = ActionArgKind.NODEID;
-    }
+	function SPAWN_CHAPACTER(string name) external;
 
 }
 ```
@@ -37,15 +31,22 @@ contract SpawnCharacter is ActionType {
 
 Rules apply `Actions` to modify `State`.
 
-The logic of what state modifications to make for any given `Action` is through a pure-like `reduce` function. Many Rules may operate on many Actions.
+The logic of what state modifications to make for any given `Action` is through
+a pure-like `reduce` function. Many Rules may operate on many Actions.
+
+The reduce function accepts the action calldata, and a context. The action
+bytes contain abi encoded calldata, the context contains some details about the
+sender of the action and their current permissions.
 
 We define then in solidity as a contract that implements the `Rule` interface:
 
 ```solidity
 contract SpawnCharacterRule is Rule {
 
-    function reduce(State state, Action memory action) public returns (State) {
-        if (action.id == address(SPAWN_CHAPACTER)) {
+    function reduce(State state, bytes calldata action, Context calldata ctx) public returns (State) {
+        if (bytes4(action) == MyActions.SPAWN_CHAPACTER.selector) {
+			// decode the action args
+			(string name) = abi.decode(action[4:], (string));
             // do some logic here
             state = state.set(....)
         }

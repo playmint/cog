@@ -3,7 +3,6 @@ pragma solidity ^0.8.13;
 
 import {
     State,
-    ActionTypeDef,
     Rule,
     Context
 } from "../../src/Dispatcher.sol";
