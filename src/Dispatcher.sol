@@ -143,7 +143,7 @@ error DispatchUntrustedSender();
 //
 // TODO:
 // * need way to remove, reorder or clear the rulesets
-abstract contract BaseDispatcher is Dispatcher {
+contract BaseDispatcher is Dispatcher {
     mapping(address => bool) private trustedRouters;
     mapping(string => address) private actionAddrs;
     ActionTypeDef[] private actionDefs;

@@ -15,6 +15,8 @@ error SessionExpiryTooLong();
 error SessionUnauthorized();
 error SessionExpired();
 
+uint32 constant MAX_TTL = 40000;
+
 contract SessionRouter is Router {
 
     event SessionCreate(
@@ -27,8 +29,6 @@ contract SessionRouter is Router {
     event SessionDestroy(
         address session
     );
-
-    uint constant MAX_TTL = 40000;
 
     struct Session {
         Dispatcher dispatcher;
