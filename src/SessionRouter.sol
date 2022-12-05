@@ -146,10 +146,10 @@ contract SessionRouter is Router {
     //
     function dispatch(
         bytes calldata action,
-        uint8 v, bytes32 r, bytes32 s
+        bytes calldata sig
     ) public {
         Session storage session;
-        if (r == 0 && s == s && v == 0) {
+        if (sig.length == 0) {
             // no signature provided, so we treat the sender as the session key
             // this is useful for authorizing external contract addresses to act
             // on behalf of the player
@@ -161,7 +161,7 @@ contract SessionRouter is Router {
             address signer = ecrecover(keccak256(abi.encodePacked(
                 "\x19Ethereum Signed Message:\n32",
                 keccak256(action)
-            )) , v, r, s);
+            )) , uint8(bytes1(sig[64:65])), bytes32(sig[0:32]), bytes32(sig[32:64]));
             session = sessions[signer];
         }
         if (session.owner == address(0)) {
@@ -184,10 +184,10 @@ contract SessionRouter is Router {
     // TODO: make batched dispach a optional interface of Router not just a special case on SessionRouter
     function dispatch(
         bytes[] calldata actions,
-        uint8[] calldata vs, bytes32[] calldata rs, bytes32[] calldata ss
+        bytes[] calldata sig
     ) public {
         for (uint i=0; i<actions.length; i++) {
-            dispatch(actions[i], vs[i], rs[i], ss[i]);
+            dispatch(actions[i], sig[i]);
         }
     }
 

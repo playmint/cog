@@ -63,11 +63,12 @@ contract BaseGameTest is Test {
         vm.startPrank(sessionAddr);
         bytes memory action = abi.encodeCall(TestActions.SET_BYTES, ("MAGIC_BYTES"));
         (uint8 v, bytes32 r, bytes32 s) = sign(action, sessionKey);
+        bytes memory sig = abi.encodePacked(r,s,v);
         vm.stopPrank();
 
         // dispatch the signed action via a relayer
         vm.startPrank(relayAddr);
-        game.getRouter().dispatch(action, v, r, s);
+        game.getRouter().dispatch(action, sig);
         vm.stopPrank();
 
         // check that the state was modified as a reult of running

@@ -73,7 +73,7 @@ interface Dispatcher {
 interface Router {
     function dispatch(
         bytes calldata action,
-        uint8 v, bytes32 r, bytes32 s // sig
+        bytes calldata sig
     ) external;
 }
 

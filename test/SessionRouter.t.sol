@@ -164,24 +164,18 @@ contract SessionRouterTest is Test {
             keccak256(action)
         ));
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(privateKey, digest);
+        bytes memory sig = abi.encodePacked(r,s,v);
 
         // initialize a batch
         bytes[] memory actions = new bytes[](1);
-        uint8[] memory vs = new uint8[](1);
-        bytes32[] memory rs = new bytes32[](1);
-        bytes32[] memory ss = new bytes32[](1);
+        bytes[] memory sigs = new bytes[](1);
 
         // assign action into batch
         actions[0] = action;
-        vs[0] = v;
-        rs[0] = r;
-        ss[0] = s;
+        sigs[0] = sig;
 
         vm.prank(relayAddr);
-        router.dispatch(
-            actions,
-            vs,rs,ss
-        );
+        router.dispatch( actions, sigs );
     }
 
 }
