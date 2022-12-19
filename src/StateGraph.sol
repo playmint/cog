@@ -10,12 +10,12 @@ error StateUnauthorizedSender();
 
 contract StateGraph is State {
 
-    mapping(bytes12 => mapping(bytes4 => mapping(bytes8 => EdgeData))) edges;
+    mapping(bytes12 => mapping(bytes4 => mapping(uint8 => EdgeData))) edges;
     mapping(address => bool) allowlist;
 
     constructor() { }
 
-    function set(bytes4 relID, bytes8 relKey, bytes12 srcNodeID, bytes12 dstNodeID, uint160 weight) external {
+    function set(bytes4 relID, uint8 relKey, bytes12 srcNodeID, bytes12 dstNodeID, uint160 weight) external {
         // TODO: uncomment this
         // if (!allowlist[msg.sender]) {
         //     revert StateUnauthorizedSender();
@@ -30,7 +30,7 @@ contract StateGraph is State {
         );
     }
 
-    function get(bytes4 relID, bytes8 relKey, bytes12 srcNodeID) external view returns (bytes12 dstNodeID, uint160 weight) {
+    function get(bytes4 relID, uint8 relKey, bytes12 srcNodeID) external view returns (bytes12 dstNodeID, uint160 weight) {
         EdgeData storage e = edges[srcNodeID][relID][relKey];
         return (e.dstNodeID, e.weight);
     }

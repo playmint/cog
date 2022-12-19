@@ -29,7 +29,7 @@ contract StateGraphTest is Test {
     );
     event EdgeSet(
         bytes4 relID,
-        bytes8 relKey,
+        uint8 relKey,
         bytes12 srcNodeID,
         bytes12 dstNodeID,
         uint160 weight
@@ -47,7 +47,7 @@ contract StateGraphTest is Test {
         bytes12 dstPersonID = bytes12(abi.encodePacked(Kind.Person.selector, uint64(2)));
 
         bytes4 relID = Rel.Friend.selector;
-        bytes8 relKey = bytes8("best");
+        uint8 relKey = 100;
         uint160 weight = 1;
 
         vm.expectEmit(true, true, true, true, address(state));

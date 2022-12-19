@@ -40,13 +40,6 @@ enum AttributeKind {
     STRING_ARRAY
 }
 
-struct Edge {
-    bytes4 rel;
-    bytes8 key;
-    bytes12 dst;
-    uint160 val;
-}
-
 // builtin Attr node types. the Attr node types are special in that
 // they have well-known ids mapping to simple scaler types that are
 // understood by indexing services. Combined with edges these are used
@@ -83,14 +76,14 @@ interface State {
     );
     event EdgeSet(
         bytes4 relID,
-        bytes8 relKey,
+        uint8 relKey,
         bytes12 srcNodeID,
         bytes12 dstNodeID,
         uint160 weight
     );
 
-    function set(bytes4 relID, bytes8 relKey, bytes12 srcNodeID, bytes12 dstNodeID, uint160 weight) external;
-    function get(bytes4 relID, bytes8 relKey, bytes12 srcNodeID) external view returns (bytes12 dstNodeId, uint160 weight);
+    function set(bytes4 relID, uint8 relKey, bytes12 srcNodeID, bytes12 dstNodeID, uint160 weight) external;
+    function get(bytes4 relID, uint8 relKey, bytes12 srcNodeID) external view returns (bytes12 dstNodeId, uint160 weight);
 
     function registerNodeType(bytes4 kindID, string memory kindName) external;
     function registerEdgeType(bytes4 relID, string memory relName) external;
