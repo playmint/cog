@@ -10,7 +10,7 @@ import {
     Context,
     SCOPE_FULL_ACCESS
 } from "../src/Dispatcher.sol";
-import {State, NodeTypeUtils, NodeType, NodeData} from "../src/State.sol";
+import {State} from "../src/State.sol";
 import {StateGraph} from "../src/StateGraph.sol";
 import {Game, BasicGame, GameMetadata} from "../src/Game.sol";
 import {MAX_TTL} from "../src/SessionRouter.sol";
@@ -74,7 +74,7 @@ contract BaseGameTest is Test {
         // check that the state was modified as a reult of running
         // through the rules
         assertEq(
-            game.getState().getBytes32(),
+            game.getState().getBytes(),
             "MAGIC_BYTES"
         );
 

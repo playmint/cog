@@ -20,6 +20,8 @@ enum AttributeKind {
     STRING,
     ADDRESS,
     BYTES4,
+    BYTES12,
+    BYTES20,
     BOOL_ARRAY,
     INT8_ARRAY,
     INT16_ARRAY,
@@ -38,108 +40,59 @@ enum AttributeKind {
     STRING_ARRAY
 }
 
-struct Attribute {
-    string name;
-    AttributeKind kind;
-    bytes32 value;
+struct Edge {
+    bytes4 rel;
+    bytes8 key;
+    bytes12 dst;
+    uint160 val;
 }
 
-struct AttributeTypeDef {
-    AttributeKind kind;
+// builtin Attr node types. the Attr node types are special in that
+// they have well-known ids mapping to simple scaler types that are
+// understood by indexing services. Combined with edges these are used
+// to assign property-style reltionships
+library Attr {
+    function Int() internal pure returns (bytes12) {
+        return bytes12(abi.encodePacked(bytes4(0xbbf0aac1), uint64(AttributeKind.INT32)));
+    }
+    function UInt() internal pure returns (bytes12) {
+        return bytes12(abi.encodePacked(bytes4(0xbbf0aac1), uint64(AttributeKind.UINT32)));
+    }
+    function Address() internal pure returns (bytes12) {
+        return bytes12(abi.encodePacked(bytes4(0xbbf0aac1), uint64(AttributeKind.ADDRESS)));
+    }
+    function Bytes() internal pure returns (bytes12) {
+        return bytes12(abi.encodePacked(bytes4(0xbbf0aac1), uint64(AttributeKind.BYTES)));
+    }
 }
 
-type NodeID is uint224;
-
-// EdgeData encodes a target NodeID the edge points to
-// and a 32bit weight value. The weight value may have
-// meaning to the EdgeType or it may be ignored.
 struct EdgeData {
-    NodeID nodeID;
-    uint32 weight;
-}
-
-// NodeData is a 256bit memory slot that can be encoded and decoded
-// by asking the NodeType
-type NodeData is uint256;
-
-// NodeTypeID is an address to a contract that implements NodeType
-type NodeTypeID is address;
-
-// NodeTypeDef is an introspection type
-// struct NodeTypeDef {
-//     string name; // a friendly human readable name, not used internaly
-//     address id; // the NodeTypeID
-//     AttributeTypeDef[] attrs; // info for decoding NodeData
-// }
-
-struct NodeMetadata {
-    string typeName;
-    address typeID;
-    Attribute[] attrs;
-}
-
-library NodeIDUtils {
-    function decodeID(NodeID id) internal pure returns (NodeType kind, uint32 s1, uint32 s2) {
-        kind = NodeType(address(uint160((NodeID.unwrap(id) >> 64))));
-        s1 = uint32((NodeID.unwrap(id) >> 32));
-        s2 = uint32((NodeID.unwrap(id) >> 0));
-        return (kind, s1, s2);
-    }
-    function getType(NodeID id) internal pure returns (NodeType kind) {
-        return NodeType(address(uint160((NodeID.unwrap(id) >> 64))));
-    }
-}
-
-
-interface NodeType {
-    function getAttributes(NodeID, NodeData) external view returns (Attribute[] memory);
-}
-
-library NodeTypeUtils {
-    function ID(NodeType kind, uint32 s1, uint32 s2) internal pure returns (NodeID) {
-        return NodeID.wrap(
-            uint224(s2)
-            | (uint224(s1) << 32)
-            | (uint224(uint160(address(kind))) << 64)
-        );
-    }
-    function ID(NodeType kind, uint32 s2) internal pure returns (NodeID) {
-        return NodeID.wrap(
-            uint224(s2)
-            | (uint224(0) << 32)
-            | (uint224(uint160(address(kind))) << 64)
-        );
-    }
-}
-
-
-interface EdgeType {
-    function getAttributes(NodeID srcNodeID, uint idx) external view returns (Attribute[] memory attrs);
+    bytes12 dstNodeID;
+    uint160 weight;
 }
 
 interface State {
 
-    event NodeSet(
-        NodeID nodeID,
-        NodeData nodeData
+    event EdgeTypeRegister(
+        bytes4 id,
+        string name
     );
-
+    event NodeTypeRegister(
+        bytes4 id,
+        string name
+    );
     event EdgeSet(
-        EdgeType kind,
-        NodeID srcNodeID,
-        NodeID dstNodeID,
-        uint idx,
-        uint32 weight
+        bytes4 relID,
+        bytes8 relKey,
+        bytes12 srcNodeID,
+        bytes12 dstNodeID,
+        uint160 weight
     );
 
-    function getNode(NodeID nodeID) external view returns (NodeData);
-    function setNode(NodeID id, NodeData data) external returns (State);
-    function setEdge(EdgeType t, NodeID srcNodeID, uint idx, EdgeData memory data) external returns (State);
-    function setEdge(EdgeType t, NodeID srcNodeID, EdgeData memory data) external returns (State);
-    function appendEdge(EdgeType t, NodeID srcNodeID, EdgeData memory data) external returns (State);
-    function getEdge(EdgeType t, NodeID srcNodeID, uint idx) external view returns (EdgeData memory);
-    function getEdge(EdgeType t, NodeID srcNodeID) external view returns (EdgeData memory edge);
-    function getEdges(EdgeType t, NodeID srcNodeID) external view returns (EdgeData[] memory);
-    function getNodeAttributes(NodeID, NodeData) external view returns (Attribute[] memory);
-    function getEdgeAttributes(EdgeType, NodeID, uint) external view returns (Attribute[] memory);
+    function set(bytes4 relID, bytes8 relKey, bytes12 srcNodeID, bytes12 dstNodeID, uint160 weight) external;
+    function get(bytes4 relID, bytes8 relKey, bytes12 srcNodeID) external view returns (bytes12 dstNodeId, uint160 weight);
+
+    function registerNodeType(bytes4 kindID, string memory kindName) external;
+    function registerEdgeType(bytes4 relID, string memory relName) external;
+    function authorizeContract(address addr) external;
 }

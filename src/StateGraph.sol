@@ -2,90 +2,55 @@
 pragma solidity ^0.8.13;
 
 import {
-    Attribute,
     State,
-    NodeData,
-    EdgeData,
-    EdgeType,
-    EdgeType,
-    NodeIDUtils,
-    NodeTypeID,
-    NodeID,
-    NodeType
+    EdgeData
 } from "./State.sol";
+
+error StateUnauthorizedSender();
 
 contract StateGraph is State {
 
-    mapping(NodeID => NodeData) nodes;
-    mapping(NodeID => mapping(EdgeType => EdgeData[])) edges;
-
-    using NodeIDUtils for NodeID;
+    mapping(bytes12 => mapping(bytes4 => mapping(bytes8 => EdgeData))) edges;
+    mapping(address => bool) allowlist;
 
     constructor() { }
 
-    function getNode(NodeID nodeID) public view returns (NodeData) {
-        return nodes[nodeID];
-    }
-
-    function getNodeAttributes(NodeID id, NodeData data) public view returns (Attribute[] memory attrs) {
-        NodeType kind = id.getType();
-        return kind.getAttributes(id, data);
-    }
-
-    function setNode(NodeID id, NodeData data) public returns (State) {
-        // TODO: require only registered node type can call this
-        nodes[id] = data;
-        emit State.NodeSet(
-            id,
-            data
-        );
-        return this;
-    }
-
-    function setEdge(EdgeType t, NodeID srcNodeID, uint idx, EdgeData memory data) public returns (State) {
-        if (edges[srcNodeID][t].length == idx) {
-            edges[srcNodeID][t].push() = data;
-        } else {
-            edges[srcNodeID][t][idx] = data;
-        }
+    function set(bytes4 relID, bytes8 relKey, bytes12 srcNodeID, bytes12 dstNodeID, uint160 weight) external {
+        // TODO: uncomment this
+        // if (!allowlist[msg.sender]) {
+        //     revert StateUnauthorizedSender();
+        // }
+        edges[srcNodeID][relID][relKey] = EdgeData(dstNodeID, weight);
         emit State.EdgeSet(
-            t,
+            relID,
+            relKey,
             srcNodeID,
-            data.nodeID,
-            idx,
-            data.weight
+            dstNodeID,
+            weight
         );
-        return this;
     }
 
-    // setEdge without index. Use when you know there is only ever a single edge of the given type.
-    function setEdge(EdgeType t, NodeID srcNodeID, EdgeData memory data) public returns (State) {
-        return setEdge(t, srcNodeID, uint(0), data);
+    function get(bytes4 relID, bytes8 relKey, bytes12 srcNodeID) external view returns (bytes12 dstNodeID, uint160 weight) {
+        EdgeData storage e = edges[srcNodeID][relID][relKey];
+        return (e.dstNodeID, e.weight);
     }
 
-    // appendEdge performs a setEdge at the end of the list.
-    function appendEdge(EdgeType t, NodeID srcNodeID, EdgeData memory data) public returns (State) {
-        return setEdge(t, srcNodeID, uint(edges[srcNodeID][t].length), data);
+    function registerNodeType(bytes4 kindID, string memory kindName) external {
+        emit State.NodeTypeRegister(
+            kindID,
+            kindName
+        );
     }
 
-    function getEdge(EdgeType t, NodeID srcNodeID, uint idx) public view returns (EdgeData memory) {
-        return edges[srcNodeID][t][idx];
+    function registerEdgeType(bytes4 relID, string memory relName) external {
+        emit State.EdgeTypeRegister(
+            relID,
+            relName
+        );
     }
 
-    function getEdge(EdgeType t, NodeID srcNodeID) public view returns (EdgeData memory edge) {
-        if (edges[srcNodeID][t].length == 0) {
-            return edge;
-        }
-        return edges[srcNodeID][t][0];
+    function authorizeContract(address addr) external {
+        allowlist[addr] = true;
     }
-
-    function getEdges(EdgeType t, NodeID srcNodeID) public view returns (EdgeData[] memory) {
-        return edges[srcNodeID][t];
-    }
-
-    function getEdgeAttributes(EdgeType t, NodeID srcNodeID, uint idx) public view returns (Attribute[] memory attrs) {
-        return t.getAttributes(srcNodeID, idx);
-    }
-
 }
 

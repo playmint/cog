@@ -9,7 +9,7 @@ import {
     Rule,
     Context
 } from "../src/Dispatcher.sol";
-import {State, NodeTypeUtils, NodeType, NodeData} from "../src/State.sol";
+import {State} from "../src/State.sol";
 import {StateGraph} from "../src/StateGraph.sol";
 
 import "./fixtures/TestActions.sol";
@@ -39,7 +39,7 @@ contract BaseDispatcherTest is Test {
         d.dispatch(action);
 
         assertEq(
-            s.getBytes32(),
+            s.getBytes(),
             "y"
         );
     }
@@ -51,7 +51,7 @@ contract BaseDispatcherTest is Test {
         d.dispatch(action);
 
         assertEq(
-            s.getBytes32(),
+            s.getBytes(),
             "MAGIC_BYTES"
         );
     }

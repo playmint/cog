@@ -1,41 +1,44 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.13;
 
-import {State, NodeTypeUtils, NodeType, NodeData} from "../../src/State.sol";
+import {
+    State,
+    EdgeData,
+    Attr
+} from "src/State.sol";
 
 // some wrappers to treat State as a single value that you can set or get
+
+interface Rel {
+    function HasValue() external;
+}
+interface Kind {
+    function TheValue() external;
+}
+
 library StateTestUtils {
-    function set(State s, uint256 value) internal returns (State) {
-        return s.setNode(
-            NodeTypeUtils.ID(NodeType(address(0)), 0, 1),
-            NodeData.wrap(uint256(value))
-        );
+    function valueNode() internal pure returns (bytes12) {
+        return bytes12(abi.encodePacked(Kind.TheValue.selector, uint64(1)));
     }
-    function set(State s, address value) internal returns (State) {
-        return s.setNode(
-            NodeTypeUtils.ID(NodeType(address(0)), 0, 1),
-            NodeData.wrap(uint256(uint160(value)))
-        );
+    function setUint(State s, uint160 value) internal {
+        return s.set(Rel.HasValue.selector, 0x0, valueNode(), Attr.Int(), uint160(value));
     }
-    function set(State s, bytes32 value) internal returns (State) {
-        return s.setNode(
-            NodeTypeUtils.ID(NodeType(address(0)), 0, 1),
-            NodeData.wrap(uint256(value))
-        );
+    function setAddress(State s, address value) internal {
+        return s.set(Rel.HasValue.selector, 0x0, valueNode(), Attr.Address(), uint160(value));
     }
-    function getUint(State s) internal view returns (uint256) {
-        return uint256(uint160(NodeData.unwrap(s.getNode(
-            NodeTypeUtils.ID(NodeType(address(0)), 0, 1)
-        ))));
+    function setBytes(State s, bytes20 value) internal {
+        return s.set(Rel.HasValue.selector, 0x0, valueNode(), Attr.Bytes(), uint160(value));
+    }
+    function getUint(State s) internal view returns (uint160) {
+        (, uint160 value) = s.get(Rel.HasValue.selector, 0x0, valueNode());
+        return value;
     }
     function getAddress(State s) internal view returns (address) {
-        return address(uint160(NodeData.unwrap(s.getNode(
-            NodeTypeUtils.ID(NodeType(address(0)), 0, 1)
-        ))));
+        (, uint160 value) = s.get(Rel.HasValue.selector, 0x0, valueNode());
+        return address(value);
     }
-    function getBytes32(State s) internal view returns (bytes32) {
-        return bytes32(NodeData.unwrap(s.getNode(
-            NodeTypeUtils.ID(NodeType(address(0)), 0, 1)
-        )));
+    function getBytes(State s) internal view returns (bytes20) {
+        (, uint160 value) = s.get(Rel.HasValue.selector, 0x0, valueNode());
+        return bytes20(value);
     }
 }
