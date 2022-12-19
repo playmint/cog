@@ -30,6 +30,7 @@ contract SessionRouter is Router {
         address session
     );
 
+    // TODO: needs gasgolfing
     struct Session {
         Dispatcher dispatcher;
         address owner;
@@ -181,7 +182,6 @@ contract SessionRouter is Router {
     }
 
     // dispatch (batched)
-    // TODO: make batched dispach a optional interface of Router not just a special case on SessionRouter
     function dispatch(
         bytes[] calldata actions,
         bytes[] calldata sig

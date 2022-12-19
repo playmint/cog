@@ -28,8 +28,9 @@ import { LibString } from "../src/utils/LibString.sol";
 using { LibString.toString } for uint256;
 
 contract ExampleDispatcher is Dispatcher, BaseDispatcher {
-    constructor(State s) BaseDispatcher(s) {
-        registerRule(new LogSenderRule());
+    constructor(State s) BaseDispatcher() {
+        _registerState(s);
+        _registerRule(new LogSenderRule());
     }
 }
 
@@ -52,7 +53,7 @@ contract SessionRouterTest is Test {
         state = new StateGraph(); // TODO: replace with a mock
         dispatcher = new ExampleDispatcher(state);
         router = new SessionRouter();
-        dispatcher.registerRouter(address(router));
+        dispatcher.registerRouter(router);
     }
 
     function testSanityCheckAddrs() public {

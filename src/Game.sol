@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.13;
 
-import {Dispatcher, BaseDispatcher, Router, Rule} from "./Dispatcher.sol";
+import {Dispatcher, Router, Rule} from "./Dispatcher.sol";
 import {SessionRouter} from "./SessionRouter.sol";
 import {State,StateGraph} from "./StateGraph.sol";
 
@@ -15,50 +15,28 @@ struct GameMetadata {
 //       require session routing so we should make this optional.
 interface Game {
     event GameDeployed(
-        address gameAddr,
         address dispatcherAddr,
         address stateAddr,
         address routerAddr
     );
     function getMetadata() external returns (GameMetadata memory);
     function getDispatcher() external returns (Dispatcher);
-    function getRouter() external returns (SessionRouter);
+    function getRouter() external returns (Router);
     function getState() external returns (State);
 }
 
-// BasicGame implements the Game interface in a very naive way
-// that is useful for getting started quickly, but is intended more
-// as a reference than as a building block.
-//
-// It handles the creation of State, Dispatcher and Router and expects
-// the inheriter to call registerRule(x).
-//
-// You will likely want to create your own custom Game contract that keeps the
-// seperation of deployment of State, Dispatchers, Routes to enable better
-// upgradability.
-abstract contract BasicGame is Game {
+// BaseGame implements a basic shell for implementing Game
+abstract contract BaseGame is Game {
 
     string internal name;
-    SessionRouter internal router;
-    BaseDispatcher internal dispatcher;
+    Router internal router;
+    Dispatcher internal dispatcher;
     State internal state;
 
     constructor(
         string memory newName
     ) {
         name = newName;
-        state = new StateGraph();
-        router = new SessionRouter();
-        dispatcher = new BaseDispatcher(state);
-
-        dispatcher.registerRouter(address(router));
-
-        emit GameDeployed(
-            address(this),
-            address(dispatcher),
-            address(state),
-            address(router)
-        );
     }
 
     function getMetadata() external view returns (GameMetadata memory) {
@@ -67,16 +45,51 @@ abstract contract BasicGame is Game {
         });
     }
 
+    // TODO: should be OwnerOnly
+    function _registerDispatcher(Dispatcher d) internal {
+        dispatcher = d;
+        emitUpdate();
+    }
+
     function getDispatcher() external view returns (Dispatcher) {
         return dispatcher;
     }
 
-    function getRouter() external view returns (SessionRouter) {
+    // TODO: should be OwnerOnly
+    function _registerRouter(Router r) internal {
+        router = r;
+        emitUpdate();
+    }
+
+    function getRouter() external view returns (Router) {
         return router;
+    }
+
+    // TODO: should be OwnerOnly
+    function _registerState(State s) internal {
+        state = s;
+        emitUpdate();
     }
 
     function getState() external view returns (State) {
         return state;
+    }
+
+    function emitUpdate() internal {
+        if (address(dispatcher) == address(0)) {
+            return;
+        }
+        if (address(state) == address(0)) {
+            return;
+        }
+        if (address(router) == address(0)) {
+            return;
+        }
+        emit GameDeployed(
+            address(dispatcher),
+            address(state),
+            address(router)
+        );
     }
 
 }
