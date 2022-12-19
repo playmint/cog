@@ -84,4 +84,26 @@ contract StateGraphTest is Test {
         );
     }
 
+    function testRegisterEdgeType() public {
+        bytes4 relID = bytes4(uint32(1));
+        string memory relName = "TESTING_EDGE_NAME";
+        vm.expectEmit(true, true, true, true, address(state));
+        emit EdgeTypeRegister(
+            relID,
+            relName
+        );
+        state.registerEdgeType(relID, relName);
+    }
+
+    function testRegisterNodeType() public {
+        bytes4 relID = bytes4(uint32(2));
+        string memory relName = "TESTING_NODE_NAME";
+        vm.expectEmit(true, true, true, true, address(state));
+        emit NodeTypeRegister(
+            relID,
+            relName
+        );
+        state.registerNodeType(relID, relName);
+    }
+
 }
