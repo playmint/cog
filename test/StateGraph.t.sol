@@ -28,8 +28,8 @@ contract StateGraphTest is Test {
     event EdgeSet(
         bytes4 relID,
         uint8 relKey,
-        bytes12 srcNodeID,
-        bytes12 dstNodeID,
+        bytes24 srcNodeID,
+        bytes24 dstNodeID,
         uint160 weight
     );
 
@@ -41,12 +41,12 @@ contract StateGraphTest is Test {
     }
 
     function testSetEdge() public {
-        bytes12 srcPersonID = bytes12(abi.encodePacked(Kind.Person.selector, uint64(1)));
-        bytes12 dstPersonID = bytes12(abi.encodePacked(Kind.Person.selector, uint64(2)));
+        bytes24 srcPersonID = bytes24(abi.encodePacked(Kind.Person.selector, uint64(1)));
+        bytes24 dstPersonID = bytes24(abi.encodePacked(Kind.Person.selector, uint64(2)));
 
         bytes4 relID = Rel.Friend.selector;
         uint8 relKey = 100;
-        uint160 weight = 1;
+        uint64 weight = 1;
 
         vm.expectEmit(true, true, true, true, address(state));
         emit EdgeSet(
@@ -65,7 +65,7 @@ contract StateGraphTest is Test {
             weight
         );
 
-        (bytes12 gotPersonID, uint160 gotWeight) = state.get(
+        (bytes24 gotPersonID, uint160 gotWeight) = state.get(
             relID,
             relKey,
             srcPersonID
@@ -85,7 +85,7 @@ contract StateGraphTest is Test {
     function testRegisterEdgeType() public {
         bytes4 relID = bytes4(uint32(1));
         string memory relName = "TESTING_EDGE_NAME";
-        WeightKind weightKind = WeightKind.UINT160;
+        WeightKind weightKind = WeightKind.UINT64;
         vm.expectEmit(true, true, true, true, address(state));
         emit EdgeTypeRegister(
             relID,
@@ -98,7 +98,7 @@ contract StateGraphTest is Test {
     function testRegisterNodeType() public {
         bytes4 relID = bytes4(uint32(2));
         string memory relName = "TESTING_NODE_NAME";
-        CompoundKeyKind keyKind = CompoundKeyKind.UINT64;
+        CompoundKeyKind keyKind = CompoundKeyKind.UINT160;
         vm.expectEmit(true, true, true, true, address(state));
         emit NodeTypeRegister(
             relID,

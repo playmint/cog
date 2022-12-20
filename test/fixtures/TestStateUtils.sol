@@ -13,28 +13,28 @@ interface Kind {
 }
 
 library StateTestUtils {
-    function valueNode() internal pure returns (bytes12) {
-        return bytes12(abi.encodePacked(Kind.TheValue.selector, uint64(1)));
-    }
-    function setUint(State s, uint160 value) internal {
-        return s.set(Rel.HasValue.selector, 0x0, valueNode(), bytes12(0), uint160(value));
+    function setUint(State s, uint64 value) internal {
+        bytes24 valueNode = bytes24(abi.encodePacked(Kind.TheValue.selector, uint96(0), value));
+        return s.set(Rel.HasValue.selector, 0x0, bytes24(0), valueNode, 0);
     }
     function setAddress(State s, address value) internal {
-        return s.set(Rel.HasValue.selector, 0x0, valueNode(), bytes12(0), uint160(value));
+        bytes24 valueNode = bytes24(abi.encodePacked(Kind.TheValue.selector, value));
+        return s.set(Rel.HasValue.selector, 0x0, bytes24(0), valueNode, 0);
     }
     function setBytes(State s, bytes20 value) internal {
-        return s.set(Rel.HasValue.selector, 0x0, valueNode(), bytes12(0), uint160(value));
+        bytes24 valueNode = bytes24(abi.encodePacked(Kind.TheValue.selector, value));
+        return s.set(Rel.HasValue.selector, 0x0, bytes24(0), valueNode, 0);
     }
-    function getUint(State s) internal view returns (uint160) {
-        (, uint160 value) = s.get(Rel.HasValue.selector, 0x0, valueNode());
-        return value;
+    function getUint(State s) internal view returns (uint64) {
+        (bytes24 valueNode,) = s.get(Rel.HasValue.selector, 0x0, 0x0);
+        return uint64(uint192(valueNode));
     }
     function getAddress(State s) internal view returns (address) {
-        (, uint160 value) = s.get(Rel.HasValue.selector, 0x0, valueNode());
-        return address(value);
+        (bytes24 valueNode,) = s.get(Rel.HasValue.selector, 0x0, 0x0);
+        return address(uint160(uint192(valueNode)));
     }
     function getBytes(State s) internal view returns (bytes20) {
-        (, uint160 value) = s.get(Rel.HasValue.selector, 0x0, valueNode());
-        return bytes20(value);
+        (bytes24 valueNode,) = s.get(Rel.HasValue.selector, 0x0, 0x0);
+        return bytes20(uint160(uint192(valueNode)));
     }
 }

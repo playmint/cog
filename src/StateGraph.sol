@@ -13,11 +13,11 @@ error StateUnauthorizedSender();
 contract StateGraph is State {
 
     struct EdgeData {
-        bytes12 dstNodeID;
-        uint160 weight;
+        bytes24 dstNodeID;
+        uint64 weight;
     }
 
-    mapping(bytes12 => mapping(bytes4 => mapping(uint8 => EdgeData))) edges;
+    mapping(bytes24 => mapping(bytes4 => mapping(uint8 => EdgeData))) edges;
     mapping(address => bool) allowlist;
 
     constructor() {
@@ -25,7 +25,7 @@ contract StateGraph is State {
         _registerNodeType(0, "NULL", CompoundKeyKind.NONE);
     }
 
-    function set(bytes4 relID, uint8 relKey, bytes12 srcNodeID, bytes12 dstNodeID, uint160 weight) external {
+    function set(bytes4 relID, uint8 relKey, bytes24 srcNodeID, bytes24 dstNodeID, uint64 weight) external {
         // TODO: uncomment this
         // if (!allowlist[msg.sender]) {
         //     revert StateUnauthorizedSender();
@@ -40,7 +40,7 @@ contract StateGraph is State {
         );
     }
 
-    function get(bytes4 relID, uint8 relKey, bytes12 srcNodeID) external view returns (bytes12 dstNodeID, uint160 weight) {
+    function get(bytes4 relID, uint8 relKey, bytes24 srcNodeID) external view returns (bytes24 dstNodeID, uint64 weight) {
         EdgeData storage e = edges[srcNodeID][relID][relKey];
         return (e.dstNodeID, e.weight);
     }
