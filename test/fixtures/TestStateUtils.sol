@@ -1,11 +1,7 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.13;
 
-import {
-    State,
-    EdgeData,
-    Attr
-} from "src/State.sol";
+import { State } from "src/State.sol";
 
 // some wrappers to treat State as a single value that you can set or get
 
@@ -21,13 +17,13 @@ library StateTestUtils {
         return bytes12(abi.encodePacked(Kind.TheValue.selector, uint64(1)));
     }
     function setUint(State s, uint160 value) internal {
-        return s.set(Rel.HasValue.selector, 0x0, valueNode(), Attr.Int(), uint160(value));
+        return s.set(Rel.HasValue.selector, 0x0, valueNode(), bytes12(0), uint160(value));
     }
     function setAddress(State s, address value) internal {
-        return s.set(Rel.HasValue.selector, 0x0, valueNode(), Attr.Address(), uint160(value));
+        return s.set(Rel.HasValue.selector, 0x0, valueNode(), bytes12(0), uint160(value));
     }
     function setBytes(State s, bytes20 value) internal {
-        return s.set(Rel.HasValue.selector, 0x0, valueNode(), Attr.Bytes(), uint160(value));
+        return s.set(Rel.HasValue.selector, 0x0, valueNode(), bytes12(0), uint160(value));
     }
     function getUint(State s) internal view returns (uint160) {
         (, uint160 value) = s.get(Rel.HasValue.selector, 0x0, valueNode());

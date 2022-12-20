@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.13;
 
-enum AttributeKind {
+// WeightKind is used to hint to the indexer what kind of value
+// you are storing in an edge's weight field.
+enum WeightKind {
     BOOL,
     INT8,
     INT16,
@@ -40,35 +42,25 @@ enum AttributeKind {
     STRING_ARRAY
 }
 
-// builtin Attr node types. the Attr node types are special in that
-// they have well-known ids mapping to simple scaler types that are
-// understood by indexing services. Combined with edges these are used
-// to assign property-style reltionships
-library Attr {
-    function Int() internal pure returns (bytes12) {
-        return bytes12(abi.encodePacked(bytes4(0xbbf0aac1), uint64(AttributeKind.INT32)));
+// Builtin node types are well-known nodes that may be useful for referencing.
+library Builtin {
+    // The Null node type for example points to the zero value, and may be used
+    // if you want a "dangling" edge that does not actually "point" anywhere
+    // particular. Most of the time this kind of dangling edge is probably an indication
+    // that the model is not quite right, but sometimes when you are treating
+    // edges like properties, components or labels pointing at the null node is
+    // reasonable.
+    function Null() internal pure returns (bytes12) {
+        return bytes12(0);
     }
-    function UInt() internal pure returns (bytes12) {
-        return bytes12(abi.encodePacked(bytes4(0xbbf0aac1), uint64(AttributeKind.UINT32)));
-    }
-    function Address() internal pure returns (bytes12) {
-        return bytes12(abi.encodePacked(bytes4(0xbbf0aac1), uint64(AttributeKind.ADDRESS)));
-    }
-    function Bytes() internal pure returns (bytes12) {
-        return bytes12(abi.encodePacked(bytes4(0xbbf0aac1), uint64(AttributeKind.BYTES)));
-    }
-}
-
-struct EdgeData {
-    bytes12 dstNodeID;
-    uint160 weight;
 }
 
 interface State {
 
     event EdgeTypeRegister(
         bytes4 id,
-        string name
+        string name,
+        WeightKind kind
     );
     event NodeTypeRegister(
         bytes4 id,
@@ -86,6 +78,6 @@ interface State {
     function get(bytes4 relID, uint8 relKey, bytes12 srcNodeID) external view returns (bytes12 dstNodeId, uint160 weight);
 
     function registerNodeType(bytes4 kindID, string memory kindName) external;
-    function registerEdgeType(bytes4 relID, string memory relName) external;
+    function registerEdgeType(bytes4 relID, string memory relName, WeightKind weightKind) external;
     function authorizeContract(address addr) external;
 }

@@ -3,12 +3,18 @@ pragma solidity ^0.8.13;
 
 import {
     State,
-    EdgeData
+    WeightKind
 } from "./State.sol";
+
 
 error StateUnauthorizedSender();
 
 contract StateGraph is State {
+
+    struct EdgeData {
+        bytes12 dstNodeID;
+        uint160 weight;
+    }
 
     mapping(bytes12 => mapping(bytes4 => mapping(uint8 => EdgeData))) edges;
     mapping(address => bool) allowlist;
@@ -42,10 +48,11 @@ contract StateGraph is State {
         );
     }
 
-    function registerEdgeType(bytes4 relID, string memory relName) external {
+    function registerEdgeType(bytes4 relID, string memory relName, WeightKind weightKind) external {
         emit State.EdgeTypeRegister(
             relID,
-            relName
+            relName,
+            weightKind
         );
     }
 

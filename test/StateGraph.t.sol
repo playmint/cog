@@ -2,11 +2,7 @@
 pragma solidity ^0.8.13;
 
 import "forge-std/Test.sol";
-import {
-    State,
-    EdgeData,
-    Attr
-} from "../src/State.sol";
+import {State, WeightKind} from "../src/State.sol";
 import {StateGraph} from "../src/StateGraph.sol";
 
 interface Rel {
@@ -21,7 +17,8 @@ contract StateGraphTest is Test {
 
     event EdgeTypeRegister(
         bytes4 id,
-        string name
+        string name,
+        WeightKind kind
     );
     event NodeTypeRegister(
         bytes4 id,
@@ -87,12 +84,14 @@ contract StateGraphTest is Test {
     function testRegisterEdgeType() public {
         bytes4 relID = bytes4(uint32(1));
         string memory relName = "TESTING_EDGE_NAME";
+        WeightKind weightKind = WeightKind.UINT64;
         vm.expectEmit(true, true, true, true, address(state));
         emit EdgeTypeRegister(
             relID,
-            relName
+            relName,
+            weightKind
         );
-        state.registerEdgeType(relID, relName);
+        state.registerEdgeType(relID, relName, weightKind);
     }
 
     function testRegisterNodeType() public {
