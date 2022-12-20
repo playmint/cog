@@ -85,7 +85,7 @@ contract StateGraphTest is Test {
     function testRegisterEdgeType() public {
         bytes4 relID = bytes4(uint32(1));
         string memory relName = "TESTING_EDGE_NAME";
-        WeightKind weightKind = WeightKind.UINT64;
+        WeightKind weightKind = WeightKind.UINT160;
         vm.expectEmit(true, true, true, true, address(state));
         emit EdgeTypeRegister(
             relID,

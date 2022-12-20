@@ -4,42 +4,11 @@ pragma solidity ^0.8.13;
 // WeightKind is used to hint to the indexer what kind of value
 // you are storing in an edge's weight field.
 enum WeightKind {
-    BOOL,
-    INT8,
-    INT16,
-    INT32,
-    INT64,
-    INT128,
-    INT256,
-    INT,
-    UINT8,
-    UINT16,
-    UINT32,
-    UINT64,
-    UINT128,
-    UINT256,
-    BYTES,
-    STRING,
+    UINT160,
+    INT160,
     ADDRESS,
-    BYTES4,
-    BYTES12,
-    BYTES20,
-    BOOL_ARRAY,
-    INT8_ARRAY,
-    INT16_ARRAY,
-    INT32_ARRAY,
-    INT64_ARRAY,
-    INT128_ARRAY,
-    INT256_ARRAY,
-    INT_ARRAY,
-    UINT8_ARRAY,
-    UINT16_ARRAY,
-    UINT32_ARRAY,
-    UINT64_ARRAY,
-    UINT128_ARRAY,
-    UINT256_ARRAY,
-    BYTES_ARRAY,
-    STRING_ARRAY
+    BYTES,
+    STRING
 }
 
 // CompoundKeyKind is a hint to how to decode the last 8bytes of a node ID.
