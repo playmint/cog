@@ -3,7 +3,8 @@ pragma solidity ^0.8.13;
 
 import {
     State,
-    WeightKind
+    WeightKind,
+    CompoundKeyKind
 } from "./State.sol";
 
 
@@ -19,7 +20,10 @@ contract StateGraph is State {
     mapping(bytes12 => mapping(bytes4 => mapping(uint8 => EdgeData))) edges;
     mapping(address => bool) allowlist;
 
-    constructor() { }
+    constructor() {
+        // register the zero value under the kind name NULL
+        _registerNodeType(0, "NULL", CompoundKeyKind.NONE);
+    }
 
     function set(bytes4 relID, uint8 relKey, bytes12 srcNodeID, bytes12 dstNodeID, uint160 weight) external {
         // TODO: uncomment this
@@ -41,14 +45,25 @@ contract StateGraph is State {
         return (e.dstNodeID, e.weight);
     }
 
-    function registerNodeType(bytes4 kindID, string memory kindName) external {
+    // TODO: allowlist only
+    function registerNodeType(bytes4 kindID, string memory kindName, CompoundKeyKind keyKind) external {
+        _registerNodeType(kindID, kindName, keyKind);
+    }
+
+    function _registerNodeType(bytes4 kindID, string memory kindName, CompoundKeyKind keyKind) internal {
         emit State.NodeTypeRegister(
             kindID,
-            kindName
+            kindName,
+            keyKind
         );
     }
 
+    // TODO: allowlist only
     function registerEdgeType(bytes4 relID, string memory relName, WeightKind weightKind) external {
+        _registerEdgeType(relID, relName, weightKind);
+    }
+
+    function _registerEdgeType(bytes4 relID, string memory relName, WeightKind weightKind) internal {
         emit State.EdgeTypeRegister(
             relID,
             relName,
@@ -56,6 +71,7 @@ contract StateGraph is State {
         );
     }
 
+    // TODO: owner only
     function authorizeContract(address addr) external {
         allowlist[addr] = true;
     }
