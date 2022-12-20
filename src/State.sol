@@ -55,6 +55,7 @@ library CompoundKeyEncoder {
     function UINT16_ARRAY(bytes4 kindID, uint16[4] memory keys) internal pure returns (bytes24) {
         return bytes24(abi.encodePacked(
             kindID,
+            uint96(0),
             keys[0],
             keys[1],
             keys[2],
@@ -64,6 +65,7 @@ library CompoundKeyEncoder {
     function UINT32_ARRAY(bytes4 kindID, uint32[2] memory keys) internal pure returns (bytes24) {
         return bytes24(abi.encodePacked(
             kindID,
+            uint96(0),
             keys[0],
             keys[1]
         ));
