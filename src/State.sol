@@ -25,7 +25,7 @@ enum CompoundKeyKind {
     STRING        // key is an 8byte string
 }
 
-library CompoundKey {
+library CompoundKeyEncoder {
     function UINT64(bytes4 kindID, uint64 key) internal pure returns (bytes12) {
         return bytes12(abi.encodePacked(kindID, key));
     }
@@ -33,28 +33,42 @@ library CompoundKey {
         return bytes12(abi.encodePacked(kindID, key));
     }
     function UINT8_ARRAY(bytes4 kindID, uint8[8] memory keys) internal pure returns (bytes12) {
-        return bytes12(abi.encodePacked(kindID, keys));
+        return bytes12(abi.encodePacked(kindID, keys[0], keys[1], keys[2], keys[3], keys[4], keys[5], keys[6], keys[7]));
     }
     function UINT16_ARRAY(bytes4 kindID, uint16[4] memory keys) internal pure returns (bytes12) {
-        return bytes12(abi.encodePacked(kindID, keys));
+        return bytes12(abi.encodePacked(kindID, keys[0], keys[1], keys[2], keys[3]));
     }
     function UINT32_ARRAY(bytes4 kindID, uint32[2] memory keys) internal pure returns (bytes12) {
-        return bytes12(abi.encodePacked(kindID, keys));
+        return bytes12(abi.encodePacked(kindID, keys[0], keys[1]));
     }
-    function BYTES4_ARRAY(bytes4 kindID, bytes4[2] memory keys) internal pure returns (bytes12) {
-        return bytes12(abi.encodePacked(kindID, keys));
+}
+
+library CompoundKeyDecoder {
+    function UINT64(bytes12 id) internal pure returns (uint64) {
+        return uint64(uint96(id));
     }
-    function STRING(bytes4 kindID, string memory key) internal pure returns (bytes12) {
-        return bytes12(abi.encodePacked(kindID, key));
+    function BYTES8(bytes12 id) internal pure returns (bytes8) {
+        return bytes8(uint64(uint96(id)));
     }
-    // The NULL node type for example points to the zero value, and may be used
-    // if you want a "dangling" edge that does not actually "point" anywhere
-    // particular. Most of the time this kind of dangling edge is probably an indication
-    // that the model is not quite right, but sometimes when you are treating
-    // edges like properties, components or labels pointing at the null node is
-    // reasonable.
-    function NULL() internal pure returns (bytes12) {
-        return bytes12(0);
+    function UINT8_ARRAY(bytes12 id) internal pure returns (uint8[8] memory keys) {
+        keys[0] = uint8(uint96(id) >> 56);
+        keys[1] = uint8(uint96(id) >> 48);
+        keys[2] = uint8(uint96(id) >> 40);
+        keys[3] = uint8(uint96(id) >> 32);
+        keys[4] = uint8(uint96(id) >> 24);
+        keys[5] = uint8(uint96(id) >> 16);
+        keys[6] = uint8(uint96(id) >> 8);
+        keys[7] = uint8(uint96(id));
+    }
+    function UINT16_ARRAY(bytes12 id) internal pure returns (uint16[4] memory keys) {
+        keys[0] = uint8(uint96(id) >> 48);
+        keys[1] = uint8(uint96(id) >> 32);
+        keys[2] = uint8(uint96(id) >> 16);
+        keys[3] = uint8(uint96(id));
+    }
+    function UINT32_ARRAY(bytes12 id) internal pure returns (uint32[2] memory keys) {
+        keys[0] = uint8(uint96(id) >> 32);
+        keys[1] = uint8(uint96(id));
     }
 }
 
