@@ -73,7 +73,7 @@ library CompoundKeyEncoder {
     function ADDRESS(bytes4 kindID, address addr) internal pure returns (bytes24) {
         return bytes24(abi.encodePacked(
             kindID,
-            addr
+            uint160(addr)
         ));
     }
 }

@@ -100,10 +100,11 @@ contract SessionRouterTest is Test {
             AUTHEN_MESSAGE,
             sessionAddr
         )));
+        bytes memory sig = abi.encodePacked(r,s,v);
 
         // relay submits the auth request on behalf of owner
         vm.prank(relayAddr);
-        router.authorizeAddr(dispatcher, 0, 0, sessionAddr, v,r,s);
+        router.authorizeAddr(dispatcher, 0, 0, sessionAddr, sig);
 
         // should now be able to use sessionKey to act as owner
         dispatchSigned(sessionKey);
@@ -147,8 +148,9 @@ contract SessionRouterTest is Test {
             REVOKE_MESSAGE,
             sessionAddr
         )));
+        bytes memory sig = abi.encodePacked(r,s,v);
         vm.prank(relayAddr);
-        router.revokeAddr(sessionAddr, v,r,s);
+        router.revokeAddr(sessionAddr, sig);
 
         // session signed actions should now fail...
         vm.expectRevert(SessionUnauthorized.selector);

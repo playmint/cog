@@ -93,11 +93,16 @@ interface Router {
         uint32 ttl,
         uint32 scopes,
         address addr,
-        uint8 v, bytes32 r, bytes32 s
+        bytes calldata sig
     ) external;
 
     function revokeAddr(
         address addr
+    ) external;
+
+    function revokeAddr(
+        address addr,
+        bytes calldata sig
     ) external;
 }
 
