@@ -129,8 +129,14 @@ interface State {
         bytes24 dstNodeID,
         uint160 weight
     );
+    event EdgeRemove(
+        bytes4 relID,
+        uint8 relKey,
+        bytes24 srcNodeID
+    );
 
     function set(bytes4 relID, uint8 relKey, bytes24 srcNodeID, bytes24 dstNodeID, uint64 weight) external;
+    function remove(bytes4 relID, uint8 relKey, bytes24 srcNodeID) external;
     function get(bytes4 relID, uint8 relKey, bytes24 srcNodeID) external view returns (bytes24 dstNodeId, uint64 weight);
 
     function registerNodeType(bytes4 kindID, string memory kindName, CompoundKeyKind keyKind) external;

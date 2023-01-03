@@ -32,6 +32,11 @@ contract StateGraphTest is Test {
         bytes24 dstNodeID,
         uint160 weight
     );
+    event EdgeRemove(
+        bytes4 relID,
+        uint8 relKey,
+        bytes24 srcNodeID
+    );
 
 
     StateGraph internal state;
@@ -80,6 +85,64 @@ contract StateGraphTest is Test {
             gotWeight,
             weight
         );
+    }
+
+    function testRemoveEdge() public {
+        bytes24 srcPersonID = bytes24(abi.encodePacked(Kind.Person.selector, uint64(1)));
+        bytes24 dstPersonID = bytes24(abi.encodePacked(Kind.Person.selector, uint64(2)));
+        bytes4 relID = Rel.Friend.selector;
+        uint8 relKey = 100;
+        uint64 weight = 1;
+
+        state.set(
+            relID,
+            relKey,
+            srcPersonID,
+            dstPersonID,
+            weight
+        );
+
+        (bytes24 gotPersonID, uint160 gotWeight) = state.get(
+            relID,
+            relKey,
+            srcPersonID
+        );
+        assertEq(
+            gotPersonID,
+            dstPersonID
+        );
+        assertEq(
+            gotWeight,
+            weight
+        );
+
+        vm.expectEmit(true, true, true, true, address(state));
+        emit EdgeRemove(
+            relID,
+            relKey,
+            srcPersonID
+        );
+
+        state.remove(
+            relID,
+            relKey,
+            srcPersonID
+        );
+
+        (bytes24 gotPersonIDAfterRemove, uint160 gotWeightAfterRemove) = state.get(
+            relID,
+            relKey,
+            srcPersonID
+        );
+        assertEq(
+            gotPersonIDAfterRemove,
+            0
+        );
+        assertEq(
+            gotWeightAfterRemove,
+            0
+        );
+
     }
 
     function testRegisterEdgeType() public {

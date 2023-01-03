@@ -40,6 +40,19 @@ contract StateGraph is State {
         );
     }
 
+    function remove(bytes4 relID, uint8 relKey, bytes24 srcNodeID) external {
+        // TODO: uncomment this
+        // if (!allowlist[msg.sender]) {
+        //     revert StateUnauthorizedSender();
+        // }
+        delete edges[srcNodeID][relID][relKey];
+        emit State.EdgeRemove(
+            relID,
+            relKey,
+            srcNodeID
+        );
+    }
+
     function get(bytes4 relID, uint8 relKey, bytes24 srcNodeID) external view returns (bytes24 dstNodeID, uint64 weight) {
         EdgeData storage e = edges[srcNodeID][relID][relKey];
         return (e.dstNodeID, e.weight);
