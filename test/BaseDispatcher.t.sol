@@ -5,11 +5,12 @@ import "forge-std/Test.sol";
 import {
     BaseDispatcher,
     Dispatcher,
+    Router,
     DispatchUntrustedSender,
     Rule,
     Context
 } from "../src/Dispatcher.sol";
-import {State, NodeTypeUtils, NodeType, NodeData} from "../src/State.sol";
+import {State} from "../src/State.sol";
 import {StateGraph} from "../src/StateGraph.sol";
 
 import "./fixtures/TestActions.sol";
@@ -18,7 +19,9 @@ import "./fixtures/TestStateUtils.sol";
 using StateTestUtils for State;
 
 contract ExampleDispatcher is Dispatcher, BaseDispatcher {
-    constructor(State s) BaseDispatcher(s) { }
+    constructor(State s) BaseDispatcher() {
+        _registerState(s);
+    }
 }
 
 contract BaseDispatcherTest is Test {
@@ -39,7 +42,7 @@ contract BaseDispatcherTest is Test {
         d.dispatch(action);
 
         assertEq(
-            s.getBytes32(),
+            s.getBytes(),
             "y"
         );
     }
@@ -51,7 +54,7 @@ contract BaseDispatcherTest is Test {
         d.dispatch(action);
 
         assertEq(
-            s.getBytes32(),
+            s.getBytes(),
             "MAGIC_BYTES"
         );
     }
@@ -74,7 +77,7 @@ contract BaseDispatcherTest is Test {
         address router = vm.addr(0x88888);
         address sender = vm.addr(0x11111);
 
-        d.registerRouter(router);
+        d.registerRouter(Router(router));
 
         Context memory ctx = Context({ sender: sender, scopes: 0, clock: uint32(block.number) });
         bytes memory action = abi.encodeCall(TestActions.SET_SENDER, ());

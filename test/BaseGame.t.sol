@@ -5,30 +5,38 @@ import "forge-std/Test.sol";
 import {
     BaseDispatcher,
     Dispatcher,
+    Router,
     DispatchUntrustedSender,
     Rule,
     Context,
     SCOPE_FULL_ACCESS
 } from "../src/Dispatcher.sol";
-import {State, NodeTypeUtils, NodeType, NodeData} from "../src/State.sol";
+import {State} from "../src/State.sol";
 import {StateGraph} from "../src/StateGraph.sol";
-import {Game, BasicGame, GameMetadata} from "../src/Game.sol";
-import {MAX_TTL} from "../src/SessionRouter.sol";
+import {Game, BaseGame, GameMetadata} from "../src/Game.sol";
+import {SessionRouter, MAX_TTL} from "../src/SessionRouter.sol";
 
 import "./fixtures/TestActions.sol";
 import "./fixtures/TestRules.sol";
 import "./fixtures/TestStateUtils.sol";
 using StateTestUtils for State;
 
-contract ExampleGame is BasicGame {
-    constructor() BasicGame("ExampleGame") {
-        dispatcher.registerRule(new LogSenderRule());
-        dispatcher.registerRule(new SetBytesRule());
+contract ExampleGame is BaseGame {
+    constructor(State s, Dispatcher d, Router r) BaseGame("ExampleGame") {
+        _registerState(s);
+        _registerRouter(r);
+        _registerDispatcher(d);
     }
 }
 
 
 contract BaseGameTest is Test {
+
+    event GameDeployed(
+        address dispatcherAddr,
+        address stateAddr,
+        address routerAddr
+    );
 
     Game game;
 
@@ -42,7 +50,22 @@ contract BaseGameTest is Test {
     address relayAddr = vm.addr(relayKey);
 
     function setUp() public {
-        game = new ExampleGame();
+        State s = new StateGraph();
+        SessionRouter r = new SessionRouter();
+        BaseDispatcher d = new BaseDispatcher();
+        d.registerRouter(r);
+        d.registerState(s);
+        d.registerRule(new LogSenderRule());
+        d.registerRule(new SetBytesRule());
+
+        vm.expectEmit(true, true, true, true);
+        emit GameDeployed(
+            address(d),
+            address(s),
+            address(r)
+        );
+
+        game = new ExampleGame(s, d, r);
     }
 
     // Ensure that we can setup sessions, dispatch signed actions and
@@ -74,7 +97,7 @@ contract BaseGameTest is Test {
         // check that the state was modified as a reult of running
         // through the rules
         assertEq(
-            game.getState().getBytes32(),
+            game.getState().getBytes(),
             "MAGIC_BYTES"
         );
 

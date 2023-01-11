@@ -75,6 +75,35 @@ interface Router {
         bytes calldata action,
         bytes calldata sig
     ) external;
+
+    function dispatch(
+        bytes[] calldata actions,
+        bytes[] calldata sig
+    ) external;
+
+    function authorizeAddr(
+        Dispatcher dispatcher,
+        uint32 ttl,
+        uint32 scopes,
+        address addr
+    ) external;
+
+    function authorizeAddr(
+        Dispatcher dispatcher,
+        uint32 ttl,
+        uint32 scopes,
+        address addr,
+        bytes calldata sig
+    ) external;
+
+    function revokeAddr(
+        address addr
+    ) external;
+
+    function revokeAddr(
+        address addr,
+        bytes calldata sig
+    ) external;
 }
 
 interface Rule {
@@ -99,18 +128,22 @@ error DispatchUntrustedSender();
 // TODO:
 // * need way to remove, reorder or clear the rulesets
 contract BaseDispatcher is Dispatcher {
-    mapping(address => bool) private trustedRouters;
+    mapping(Router => bool) private trustedRouters;
     mapping(string => address) private actionAddrs;
     Rule[] private rules;
-    State private gameState;
+    State private state;
 
-    constructor(State s) {
-        gameState = s;
-        registerRouter(address(this));
+    constructor() {
+        // allow calling ourself
+        registerRouter(Router(address(this)));
     }
 
     // TODO: this should be an owneronly func
     function registerRule(Rule rule) public {
+        _registerRule(rule);
+    }
+
+    function _registerRule(Rule rule) internal {
         rules.push() = rule;
     }
 
@@ -121,20 +154,25 @@ contract BaseDispatcher is Dispatcher {
     // or when using a "session key" pattern like the SessionRouter.
     //
     // TODO: this should be an owneronly func
-    function registerRouter(address r) public {
+    function registerRouter(Router r) public {
+        _registerRouter(r);
+    }
+
+    function _registerRouter(Router r) internal {
         trustedRouters[r] = true;
     }
 
-    function isRegisteredRouter(address r) internal view returns (bool) {
-        return trustedRouters[r];
+    // TODO: this should be an owneronly func
+    function registerState(State s) public {
+        _registerState(s);
     }
 
-    // reduce applies the action+ctx to all the rules
-    function reduce(State state, bytes calldata action, Context calldata ctx) internal returns (State) {
-        for (uint i=0; i<rules.length; i++) {
-            state = rules[i].reduce(state, action, ctx);
-        }
-        return state;
+    function _registerState(State s) internal {
+        state = s;
+    }
+
+    function isRegisteredRouter(address r) internal view returns (bool) {
+        return trustedRouters[Router(r)];
     }
 
     function dispatch(bytes calldata action, Context calldata ctx) public {
@@ -144,7 +182,9 @@ contract BaseDispatcher is Dispatcher {
         if (!isRegisteredRouter(msg.sender)) {
             revert DispatchUntrustedSender();
         }
-        gameState = reduce(gameState, action, ctx);
+        for (uint i=0; i<rules.length; i++) {
+            rules[i].reduce(state, action, ctx);
+        }
         emit ActionDispatched(
             address(ctx.sender),
             "<nonce>" // TODO: unique ids, nonces, and replay protection

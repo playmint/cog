@@ -9,7 +9,7 @@ import {
     Rule,
     Context
 } from "../src/Dispatcher.sol";
-import {State, NodeTypeUtils, NodeType, NodeData} from "../src/State.sol";
+import {State} from "../src/State.sol";
 import {StateGraph} from "../src/StateGraph.sol";
 import {
     SessionRouter,
@@ -28,8 +28,9 @@ import { LibString } from "../src/utils/LibString.sol";
 using { LibString.toString } for uint256;
 
 contract ExampleDispatcher is Dispatcher, BaseDispatcher {
-    constructor(State s) BaseDispatcher(s) {
-        registerRule(new LogSenderRule());
+    constructor(State s) BaseDispatcher() {
+        _registerState(s);
+        _registerRule(new LogSenderRule());
     }
 }
 
@@ -52,7 +53,7 @@ contract SessionRouterTest is Test {
         state = new StateGraph(); // TODO: replace with a mock
         dispatcher = new ExampleDispatcher(state);
         router = new SessionRouter();
-        dispatcher.registerRouter(address(router));
+        dispatcher.registerRouter(router);
     }
 
     function testSanityCheckAddrs() public {
@@ -99,10 +100,11 @@ contract SessionRouterTest is Test {
             AUTHEN_MESSAGE,
             sessionAddr
         )));
+        bytes memory sig = abi.encodePacked(r,s,v);
 
         // relay submits the auth request on behalf of owner
         vm.prank(relayAddr);
-        router.authorizeAddr(dispatcher, 0, 0, sessionAddr, v,r,s);
+        router.authorizeAddr(dispatcher, 0, 0, sessionAddr, sig);
 
         // should now be able to use sessionKey to act as owner
         dispatchSigned(sessionKey);
@@ -146,8 +148,9 @@ contract SessionRouterTest is Test {
             REVOKE_MESSAGE,
             sessionAddr
         )));
+        bytes memory sig = abi.encodePacked(r,s,v);
         vm.prank(relayAddr);
-        router.revokeAddr(sessionAddr, v,r,s);
+        router.revokeAddr(sessionAddr, sig);
 
         // session signed actions should now fail...
         vm.expectRevert(SessionUnauthorized.selector);

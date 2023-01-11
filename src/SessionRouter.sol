@@ -30,6 +30,7 @@ contract SessionRouter is Router {
         address session
     );
 
+    // TODO: needs gasgolfing
     struct Session {
         Dispatcher dispatcher;
         address owner;
@@ -61,14 +62,14 @@ contract SessionRouter is Router {
         uint32 ttl,
         uint32 scopes,
         address addr,
-        uint8 v, bytes32 r, bytes32 s
+        bytes calldata sig
     ) public {
         address owner = ecrecover(keccak256(abi.encodePacked(
             PREFIX_MESSAGE,
             (AUTHEN_MESSAGE.length+20).toString(),
             AUTHEN_MESSAGE,
             addr
-        )) , v, r, s);
+        )) , uint8(bytes1(sig[64:65])), bytes32(sig[0:32]), bytes32(sig[32:64]));
         if (owner == address(0)) {
             revert SessionUnauthorized();
         }
@@ -119,14 +120,14 @@ contract SessionRouter is Router {
     // revokeKey expires the session key, requires signer of v/r/s to be session owner
     function revokeAddr(
         address addr,
-        uint8 v, bytes32 r, bytes32 s
+        bytes calldata sig
     ) public {
         address owner = ecrecover(keccak256(abi.encodePacked(
             PREFIX_MESSAGE,
             (REVOKE_MESSAGE.length+20).toString(),
             REVOKE_MESSAGE,
             addr
-        )) , v, r, s);
+        )) , uint8(bytes1(sig[64:65])), bytes32(sig[0:32]), bytes32(sig[32:64]));
         Session storage session = sessions[addr];
         if (session.owner != owner) {
             revert SessionUnauthorized();
@@ -181,7 +182,6 @@ contract SessionRouter is Router {
     }
 
     // dispatch (batched)
-    // TODO: make batched dispach a optional interface of Router not just a special case on SessionRouter
     function dispatch(
         bytes[] calldata actions,
         bytes[] calldata sig

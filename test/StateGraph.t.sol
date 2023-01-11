@@ -2,146 +2,173 @@
 pragma solidity ^0.8.13;
 
 import "forge-std/Test.sol";
-import {
-    Attribute,
-    AttributeKind,
-    State,
-    NodeData,
-    EdgeType,
-    EdgeData,
-    NodeType,
-    NodeIDUtils,
-    NodeTypeID,
-    NodeTypeUtils,
-    NodeID
-} from "../src/State.sol";
+import {State, WeightKind, CompoundKeyKind} from "../src/State.sol";
 import {StateGraph} from "../src/StateGraph.sol";
 
-using NodeTypeUtils for NodeType;
-using NodeIDUtils for NodeID;
-
-contract Thing is NodeType {
-    function getAttributes(NodeID, NodeData) public pure returns (Attribute[] memory attrs) {
-        attrs = new Attribute[](3);
-        attrs[0].name = "kind";
-        attrs[0].kind = AttributeKind.STRING;
-        attrs[0].value = bytes32("THING");
-    }
+interface Rel {
+    function Friend() external;
 }
 
-contract HasOne is EdgeType {
-    function getAttributes(NodeID /*id*/, uint /*idx*/) public pure returns (Attribute[] memory attrs) {
-        attrs = new Attribute[](1);
-        attrs[0].name = "kind";
-        attrs[0].kind = AttributeKind.STRING;
-        attrs[0].value = bytes32("HAS_ONE");
-    }
+interface Kind {
+    function Person() external;
 }
 
 contract StateGraphTest is Test {
 
-    event NodeSet(
-        NodeID nodeID,
-        NodeData nodeData
+    event EdgeTypeRegister(
+        bytes4 id,
+        string name,
+        WeightKind kind
     );
-
+    event NodeTypeRegister(
+        bytes4 id,
+        string name,
+        CompoundKeyKind keyKind
+    );
     event EdgeSet(
-        EdgeType kind,
-        NodeID srcNodeID,
-        NodeID dstNodeID,
-        uint idx,
-        uint32 weight
+        bytes4 relID,
+        uint8 relKey,
+        bytes24 srcNodeID,
+        bytes24 dstNodeID,
+        uint160 weight
+    );
+    event EdgeRemove(
+        bytes4 relID,
+        uint8 relKey,
+        bytes24 srcNodeID
     );
 
 
-    StateGraph internal g;
-
-    NodeType thing;
-    EdgeType hasOne;
+    StateGraph internal state;
 
     function setUp() public {
-        g = new StateGraph();
-        thing = new Thing();
-        hasOne = new HasOne();
-    }
-
-    function testSetNode() public {
-        NodeID nodeA = thing.ID(1);
-
-        uint256 inData = 1;
-
-        vm.expectEmit(true, true, true, true, address(g));
-        emit NodeSet(
-            nodeA,
-            NodeData.wrap(inData)
-        );
-
-        g.setNode(nodeA, NodeData.wrap(inData));
-        uint256 outData = NodeData.unwrap(g.getNode(nodeA));
-
-        assertEq(inData, outData);
+        state = new StateGraph();
     }
 
     function testSetEdge() public {
-        NodeID nodeA = thing.ID(1);
-        NodeID nodeB = thing.ID(2);
+        bytes24 srcPersonID = bytes24(abi.encodePacked(Kind.Person.selector, uint64(1)));
+        bytes24 dstPersonID = bytes24(abi.encodePacked(Kind.Person.selector, uint64(2)));
 
-        vm.expectEmit(true, true, true, true, address(g));
+        bytes4 relID = Rel.Friend.selector;
+        uint8 relKey = 100;
+        uint64 weight = 1;
+
+        vm.expectEmit(true, true, true, true, address(state));
         emit EdgeSet(
-            hasOne,
-            nodeA,
-            nodeB,
-            0,            // idx
-            uint32(65000) // weight
+            relID,
+            relKey,
+            srcPersonID,
+            dstPersonID,
+            weight
         );
 
-        g.setEdge(hasOne, nodeA, EdgeData({
-            nodeID: nodeB,
-            weight: 65000
-        }));
+        state.set(
+            relID,
+            relKey,
+            srcPersonID,
+            dstPersonID,
+            weight
+        );
 
-        EdgeData memory outEdge = g.getEdge(hasOne, nodeA);
+        (bytes24 gotPersonID, uint160 gotWeight) = state.get(
+            relID,
+            relKey,
+            srcPersonID
+        );
+
 
         assertEq(
-            NodeID.unwrap(outEdge.nodeID),
-            NodeID.unwrap(nodeB)
+            gotPersonID,
+            dstPersonID
         );
         assertEq(
-            outEdge.weight,
-            65000
+            gotWeight,
+            weight
         );
     }
 
-    function testAppendEdges() public {
-        NodeID nodeA = thing.ID(100);
+    function testRemoveEdge() public {
+        bytes24 srcPersonID = bytes24(abi.encodePacked(Kind.Person.selector, uint64(1)));
+        bytes24 dstPersonID = bytes24(abi.encodePacked(Kind.Person.selector, uint64(2)));
+        bytes4 relID = Rel.Friend.selector;
+        uint8 relKey = 100;
+        uint64 weight = 1;
 
-        for (uint32 i=0; i<3; i++) {
-            NodeID nodeB = thing.ID(i);
+        state.set(
+            relID,
+            relKey,
+            srcPersonID,
+            dstPersonID,
+            weight
+        );
 
-            vm.expectEmit(true, true, true, true, address(g));
-            emit EdgeSet(
-                hasOne,
-                nodeA,
-                nodeB,
-                i,        // idx
-                uint32(i) // weight
-            );
+        (bytes24 gotPersonID, uint160 gotWeight) = state.get(
+            relID,
+            relKey,
+            srcPersonID
+        );
+        assertEq(
+            gotPersonID,
+            dstPersonID
+        );
+        assertEq(
+            gotWeight,
+            weight
+        );
 
-            g.appendEdge(hasOne, nodeA, EdgeData({
-                nodeID: nodeB,
-                weight: uint32(i)
-            }));
-        }
+        vm.expectEmit(true, true, true, true, address(state));
+        emit EdgeRemove(
+            relID,
+            relKey,
+            srcPersonID
+        );
 
-        EdgeData[] memory outEdges = g.getEdges(hasOne, nodeA);
+        state.remove(
+            relID,
+            relKey,
+            srcPersonID
+        );
 
-        for (uint32 i=0; i<3; i++) {
-            NodeID nodeB = thing.ID(i);
-            assertEq(
-                NodeID.unwrap(outEdges[i].nodeID),
-                NodeID.unwrap(nodeB)
-            );
-        }
+        (bytes24 gotPersonIDAfterRemove, uint160 gotWeightAfterRemove) = state.get(
+            relID,
+            relKey,
+            srcPersonID
+        );
+        assertEq(
+            gotPersonIDAfterRemove,
+            0
+        );
+        assertEq(
+            gotWeightAfterRemove,
+            0
+        );
+
+    }
+
+    function testRegisterEdgeType() public {
+        bytes4 relID = bytes4(uint32(1));
+        string memory relName = "TESTING_EDGE_NAME";
+        WeightKind weightKind = WeightKind.UINT64;
+        vm.expectEmit(true, true, true, true, address(state));
+        emit EdgeTypeRegister(
+            relID,
+            relName,
+            weightKind
+        );
+        state.registerEdgeType(relID, relName, weightKind);
+    }
+
+    function testRegisterNodeType() public {
+        bytes4 relID = bytes4(uint32(2));
+        string memory relName = "TESTING_NODE_NAME";
+        CompoundKeyKind keyKind = CompoundKeyKind.UINT160;
+        vm.expectEmit(true, true, true, true, address(state));
+        emit NodeTypeRegister(
+            relID,
+            relName,
+            keyKind
+        );
+        state.registerNodeType(relID, relName, keyKind);
     }
 
 }
