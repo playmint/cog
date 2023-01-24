@@ -16,9 +16,13 @@ enum CompoundKeyKind {
     NONE,         // key is not expected to be anything other than 0
     UINT160,      // key is a single uint64
     UINT8_ARRAY,  // key is 20 uint8s
+    INT8_ARRAY,  // key is 20 int8s
     UINT16_ARRAY, // key is 10 uint16s
+    INT16_ARRAY, // key is 10 int16s
     UINT32_ARRAY, // key is 5 uint32s
+    INT32_ARRAY, // key is 5 int32s
     UINT64_ARRAY, // key is 2 uint64s
+    INT64_ARRAY, // key is 2 int64s
     ADDRESS,      // key is 20 byte address
     BYTES,        // key is an 20 byte blob of data
     STRING        // key is an 20 byte string
@@ -62,7 +66,25 @@ library CompoundKeyEncoder {
             keys[3]
         ));
     }
+    function INT16_ARRAY(bytes4 kindID, int16[4] memory keys) internal pure returns (bytes24) {
+        return bytes24(abi.encodePacked(
+            kindID,
+            uint96(0),
+            keys[0],
+            keys[1],
+            keys[2],
+            keys[3]
+        ));
+    }
     function UINT32_ARRAY(bytes4 kindID, uint32[2] memory keys) internal pure returns (bytes24) {
+        return bytes24(abi.encodePacked(
+            kindID,
+            uint96(0),
+            keys[0],
+            keys[1]
+        ));
+    }
+    function INT32_ARRAY(bytes4 kindID, int32[2] memory keys) internal pure returns (bytes24) {
         return bytes24(abi.encodePacked(
             kindID,
             uint96(0),
@@ -96,14 +118,24 @@ library CompoundKeyDecoder {
         keys[7] = uint8(uint192(id));
     }
     function UINT16_ARRAY(bytes24 id) internal pure returns (uint16[4] memory keys) {
-        keys[0] = uint8(uint192(id) >> 48);
-        keys[1] = uint8(uint192(id) >> 32);
-        keys[2] = uint8(uint192(id) >> 16);
-        keys[3] = uint8(uint192(id));
+        keys[0] = uint16(uint192(id) >> 48);
+        keys[1] = uint16(uint192(id) >> 32);
+        keys[2] = uint16(uint192(id) >> 16);
+        keys[3] = uint16(uint192(id));
+    }
+    function INT16_ARRAY(bytes24 id) internal pure returns (int16[4] memory keys) {
+        keys[0] = int16(int192(uint192(id) >> 48));
+        keys[1] = int16(int192(uint192(id) >> 32));
+        keys[2] = int16(int192(uint192(id) >> 16));
+        keys[3] = int16(int192(uint192(id)));
     }
     function UINT32_ARRAY(bytes24 id) internal pure returns (uint32[2] memory keys) {
-        keys[0] = uint8(uint192(id) >> 32);
-        keys[1] = uint8(uint192(id));
+        keys[0] = uint32(uint192(id) >> 32);
+        keys[1] = uint32(uint192(id));
+    }
+    function INT32_ARRAY(bytes24 id) internal pure returns (int32[2] memory keys) {
+        keys[0] = int32(int192(uint192(id) >> 32));
+        keys[1] = int32(int192(uint192(id)));
     }
     function ADDRESS(bytes24 id) internal pure returns (address) {
         return address(uint160(uint192(id)));
