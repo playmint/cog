@@ -22,7 +22,7 @@ import "./fixtures/TestStateUtils.sol";
 using StateTestUtils for State;
 
 contract ExampleGame is BaseGame {
-    constructor(State s, Dispatcher d, Router r) BaseGame("ExampleGame") {
+    constructor(State s, Dispatcher d, Router r) BaseGame("ExampleGame", "http://localhost:3000/") {
         _registerState(s);
         _registerRouter(r);
         _registerDispatcher(d);
@@ -106,6 +106,7 @@ contract BaseGameTest is Test {
     function testMetadata() public {
         GameMetadata memory metadata = game.getMetadata();
         assertEq(metadata.name, "ExampleGame");
+        assertEq(metadata.url, "http://localhost:3000/");
     }
 
     function sign(bytes memory action, uint256 privateKey) private pure returns (uint8 v, bytes32 r, bytes32 s) {

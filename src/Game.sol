@@ -7,6 +7,7 @@ import {State,StateGraph} from "./StateGraph.sol";
 
 struct GameMetadata {
     string name;
+    string url;
 }
 // Game links together the State and Dispatcher that together
 //
@@ -29,19 +30,23 @@ interface Game {
 abstract contract BaseGame is Game {
 
     string internal name;
+    string internal url;
     Router internal router;
     Dispatcher internal dispatcher;
     State internal state;
 
     constructor(
-        string memory newName
+        string memory newName,
+        string memory newURL
     ) {
         name = newName;
+        url = newURL;
     }
 
     function getMetadata() external view returns (GameMetadata memory) {
         return GameMetadata({
-            name: name
+            name: name,
+            url: url
         });
     }
 
