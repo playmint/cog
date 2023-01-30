@@ -43,7 +43,7 @@ abstract contract BaseGame is Game {
         url = newURL;
     }
 
-    function getMetadata() external view returns (GameMetadata memory) {
+    function getMetadata() public view returns (GameMetadata memory) {
         return GameMetadata({
             name: name,
             url: url
