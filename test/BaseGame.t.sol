@@ -19,6 +19,7 @@ import {SessionRouter, MAX_TTL} from "../src/SessionRouter.sol";
 import "./fixtures/TestActions.sol";
 import "./fixtures/TestRules.sol";
 import "./fixtures/TestStateUtils.sol";
+
 using StateTestUtils for State;
 
 contract ExampleGame is BaseGame {
@@ -29,14 +30,8 @@ contract ExampleGame is BaseGame {
     }
 }
 
-
 contract BaseGameTest is Test {
-
-    event GameDeployed(
-        address dispatcherAddr,
-        address stateAddr,
-        address routerAddr
-    );
+    event GameDeployed(address dispatcherAddr, address stateAddr, address routerAddr);
 
     Game game;
 
@@ -59,11 +54,7 @@ contract BaseGameTest is Test {
         d.registerRule(new SetBytesRule());
 
         vm.expectEmit(true, true, true, true);
-        emit GameDeployed(
-            address(d),
-            address(s),
-            address(r)
-        );
+        emit GameDeployed(address(d), address(s), address(r));
 
         game = new ExampleGame(s, d, r);
     }
@@ -71,22 +62,16 @@ contract BaseGameTest is Test {
     // Ensure that we can setup sessions, dispatch signed actions and
     // have the registered rules executed to modify the state.
     function testRoutedActions() public {
-
         // setup a sessionkey with the router
         vm.startPrank(ownerAddr);
-        game.getRouter().authorizeAddr(
-            game.getDispatcher(),
-            MAX_TTL,
-            SCOPE_FULL_ACCESS,
-            sessionAddr
-        );
+        game.getRouter().authorizeAddr(game.getDispatcher(), MAX_TTL, SCOPE_FULL_ACCESS, sessionAddr);
         vm.stopPrank();
 
         // sign an action with the sessionKey
         vm.startPrank(sessionAddr);
         bytes memory action = abi.encodeCall(TestActions.SET_BYTES, ("MAGIC_BYTES"));
         (uint8 v, bytes32 r, bytes32 s) = sign(action, sessionKey);
-        bytes memory sig = abi.encodePacked(r,s,v);
+        bytes memory sig = abi.encodePacked(r, s, v);
         vm.stopPrank();
 
         // dispatch the signed action via a relayer
@@ -96,11 +81,7 @@ contract BaseGameTest is Test {
 
         // check that the state was modified as a reult of running
         // through the rules
-        assertEq(
-            game.getState().getBytes(),
-            "MAGIC_BYTES"
-        );
-
+        assertEq(game.getState().getBytes(), "MAGIC_BYTES");
     }
 
     function testMetadata() public {
@@ -110,11 +91,7 @@ contract BaseGameTest is Test {
     }
 
     function sign(bytes memory action, uint256 privateKey) private pure returns (uint8 v, bytes32 r, bytes32 s) {
-        bytes32 digest = keccak256(abi.encodePacked(
-            "\x19Ethereum Signed Message:\n32",
-            keccak256(action)
-        ));
+        bytes32 digest = keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n32", keccak256(action)));
         return vm.sign(privateKey, digest);
     }
-
 }

@@ -3,7 +3,7 @@ pragma solidity ^0.8.13;
 
 import {Dispatcher, Router, Rule} from "./Dispatcher.sol";
 import {SessionRouter} from "./SessionRouter.sol";
-import {State,StateGraph} from "./StateGraph.sol";
+import {State, StateGraph} from "./StateGraph.sol";
 
 struct GameMetadata {
     string name;
@@ -14,12 +14,10 @@ struct GameMetadata {
 // TODO: this interface is too specific to playmint's setup
 //       which requires a SessionRouter, but not all games really
 //       require session routing so we should make this optional.
+
 interface Game {
-    event GameDeployed(
-        address dispatcherAddr,
-        address stateAddr,
-        address routerAddr
-    );
+    event GameDeployed(address dispatcherAddr, address stateAddr, address routerAddr);
+
     function getMetadata() external returns (GameMetadata memory);
     function getDispatcher() external returns (Dispatcher);
     function getRouter() external returns (Router);
@@ -28,26 +26,19 @@ interface Game {
 
 // BaseGame implements a basic shell for implementing Game
 abstract contract BaseGame is Game {
-
     string internal name;
     string internal url;
     Router internal router;
     Dispatcher internal dispatcher;
     State internal state;
 
-    constructor(
-        string memory newName,
-        string memory newURL
-    ) {
+    constructor(string memory newName, string memory newURL) {
         name = newName;
         url = newURL;
     }
 
     function getMetadata() public view returns (GameMetadata memory) {
-        return GameMetadata({
-            name: name,
-            url: url
-        });
+        return GameMetadata({name: name, url: url});
     }
 
     // TODO: should be OwnerOnly
@@ -90,11 +81,6 @@ abstract contract BaseGame is Game {
         if (address(router) == address(0)) {
             return;
         }
-        emit GameDeployed(
-            address(dispatcher),
-            address(state),
-            address(router)
-        );
+        emit GameDeployed(address(dispatcher), address(state), address(router));
     }
-
 }
