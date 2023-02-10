@@ -14,30 +14,10 @@ interface Kind {
 }
 
 contract StateGraphTest is Test {
-
-    event EdgeTypeRegister(
-        bytes4 id,
-        string name,
-        WeightKind kind
-    );
-    event NodeTypeRegister(
-        bytes4 id,
-        string name,
-        CompoundKeyKind keyKind
-    );
-    event EdgeSet(
-        bytes4 relID,
-        uint8 relKey,
-        bytes24 srcNodeID,
-        bytes24 dstNodeID,
-        uint160 weight
-    );
-    event EdgeRemove(
-        bytes4 relID,
-        uint8 relKey,
-        bytes24 srcNodeID
-    );
-
+    event EdgeTypeRegister(bytes4 id, string name, WeightKind kind);
+    event NodeTypeRegister(bytes4 id, string name, CompoundKeyKind keyKind);
+    event EdgeSet(bytes4 relID, uint8 relKey, bytes24 srcNodeID, bytes24 dstNodeID, uint160 weight);
+    event EdgeRemove(bytes4 relID, uint8 relKey, bytes24 srcNodeID);
 
     StateGraph internal state;
 
@@ -54,37 +34,14 @@ contract StateGraphTest is Test {
         uint64 weight = 1;
 
         vm.expectEmit(true, true, true, true, address(state));
-        emit EdgeSet(
-            relID,
-            relKey,
-            srcPersonID,
-            dstPersonID,
-            weight
-        );
+        emit EdgeSet(relID, relKey, srcPersonID, dstPersonID, weight);
 
-        state.set(
-            relID,
-            relKey,
-            srcPersonID,
-            dstPersonID,
-            weight
-        );
+        state.set(relID, relKey, srcPersonID, dstPersonID, weight);
 
-        (bytes24 gotPersonID, uint160 gotWeight) = state.get(
-            relID,
-            relKey,
-            srcPersonID
-        );
+        (bytes24 gotPersonID, uint160 gotWeight) = state.get(relID, relKey, srcPersonID);
 
-
-        assertEq(
-            gotPersonID,
-            dstPersonID
-        );
-        assertEq(
-            gotWeight,
-            weight
-        );
+        assertEq(gotPersonID, dstPersonID);
+        assertEq(gotWeight, weight);
     }
 
     function testRemoveEdge() public {
@@ -94,55 +51,20 @@ contract StateGraphTest is Test {
         uint8 relKey = 100;
         uint64 weight = 1;
 
-        state.set(
-            relID,
-            relKey,
-            srcPersonID,
-            dstPersonID,
-            weight
-        );
+        state.set(relID, relKey, srcPersonID, dstPersonID, weight);
 
-        (bytes24 gotPersonID, uint160 gotWeight) = state.get(
-            relID,
-            relKey,
-            srcPersonID
-        );
-        assertEq(
-            gotPersonID,
-            dstPersonID
-        );
-        assertEq(
-            gotWeight,
-            weight
-        );
+        (bytes24 gotPersonID, uint160 gotWeight) = state.get(relID, relKey, srcPersonID);
+        assertEq(gotPersonID, dstPersonID);
+        assertEq(gotWeight, weight);
 
         vm.expectEmit(true, true, true, true, address(state));
-        emit EdgeRemove(
-            relID,
-            relKey,
-            srcPersonID
-        );
+        emit EdgeRemove(relID, relKey, srcPersonID);
 
-        state.remove(
-            relID,
-            relKey,
-            srcPersonID
-        );
+        state.remove(relID, relKey, srcPersonID);
 
-        (bytes24 gotPersonIDAfterRemove, uint160 gotWeightAfterRemove) = state.get(
-            relID,
-            relKey,
-            srcPersonID
-        );
-        assertEq(
-            gotPersonIDAfterRemove,
-            0
-        );
-        assertEq(
-            gotWeightAfterRemove,
-            0
-        );
-
+        (bytes24 gotPersonIDAfterRemove, uint160 gotWeightAfterRemove) = state.get(relID, relKey, srcPersonID);
+        assertEq(gotPersonIDAfterRemove, 0);
+        assertEq(gotWeightAfterRemove, 0);
     }
 
     function testRegisterEdgeType() public {
@@ -150,11 +72,7 @@ contract StateGraphTest is Test {
         string memory relName = "TESTING_EDGE_NAME";
         WeightKind weightKind = WeightKind.UINT64;
         vm.expectEmit(true, true, true, true, address(state));
-        emit EdgeTypeRegister(
-            relID,
-            relName,
-            weightKind
-        );
+        emit EdgeTypeRegister(relID, relName, weightKind);
         state.registerEdgeType(relID, relName, weightKind);
     }
 
@@ -163,12 +81,7 @@ contract StateGraphTest is Test {
         string memory relName = "TESTING_NODE_NAME";
         CompoundKeyKind keyKind = CompoundKeyKind.UINT160;
         vm.expectEmit(true, true, true, true, address(state));
-        emit NodeTypeRegister(
-            relID,
-            relName,
-            keyKind
-        );
+        emit NodeTypeRegister(relID, relName, keyKind);
         state.registerNodeType(relID, relName, keyKind);
     }
-
 }

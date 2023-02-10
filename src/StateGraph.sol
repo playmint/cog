@@ -1,17 +1,11 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.13;
 
-import {
-    State,
-    WeightKind,
-    CompoundKeyKind
-} from "./State.sol";
-
+import {State, WeightKind, CompoundKeyKind} from "./State.sol";
 
 error StateUnauthorizedSender();
 
 contract StateGraph is State {
-
     struct EdgeData {
         bytes24 dstNodeID;
         uint64 weight;
@@ -31,13 +25,7 @@ contract StateGraph is State {
         //     revert StateUnauthorizedSender();
         // }
         edges[srcNodeID][relID][relKey] = EdgeData(dstNodeID, weight);
-        emit State.EdgeSet(
-            relID,
-            relKey,
-            srcNodeID,
-            dstNodeID,
-            weight
-        );
+        emit State.EdgeSet(relID, relKey, srcNodeID, dstNodeID, weight);
     }
 
     function remove(bytes4 relID, uint8 relKey, bytes24 srcNodeID) external {
@@ -46,14 +34,14 @@ contract StateGraph is State {
         //     revert StateUnauthorizedSender();
         // }
         delete edges[srcNodeID][relID][relKey];
-        emit State.EdgeRemove(
-            relID,
-            relKey,
-            srcNodeID
-        );
+        emit State.EdgeRemove(relID, relKey, srcNodeID);
     }
 
-    function get(bytes4 relID, uint8 relKey, bytes24 srcNodeID) external view returns (bytes24 dstNodeID, uint64 weight) {
+    function get(bytes4 relID, uint8 relKey, bytes24 srcNodeID)
+        external
+        view
+        returns (bytes24 dstNodeID, uint64 weight)
+    {
         EdgeData storage e = edges[srcNodeID][relID][relKey];
         return (e.dstNodeID, e.weight);
     }
@@ -64,11 +52,7 @@ contract StateGraph is State {
     }
 
     function _registerNodeType(bytes4 kindID, string memory kindName, CompoundKeyKind keyKind) internal {
-        emit State.NodeTypeRegister(
-            kindID,
-            kindName,
-            keyKind
-        );
+        emit State.NodeTypeRegister(kindID, kindName, keyKind);
     }
 
     // TODO: allowlist only
@@ -77,11 +61,7 @@ contract StateGraph is State {
     }
 
     function _registerEdgeType(bytes4 relID, string memory relName, WeightKind weightKind) internal {
-        emit State.EdgeTypeRegister(
-            relID,
-            relName,
-            weightKind
-        );
+        emit State.EdgeTypeRegister(relID, relName, weightKind);
     }
 
     // TODO: owner only
@@ -89,4 +69,3 @@ contract StateGraph is State {
         allowlist[addr] = true;
     }
 }
-

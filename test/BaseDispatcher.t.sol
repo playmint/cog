@@ -2,20 +2,14 @@
 pragma solidity ^0.8.13;
 
 import "forge-std/Test.sol";
-import {
-    BaseDispatcher,
-    Dispatcher,
-    Router,
-    DispatchUntrustedSender,
-    Rule,
-    Context
-} from "../src/Dispatcher.sol";
+import {BaseDispatcher, Dispatcher, Router, DispatchUntrustedSender, Rule, Context} from "../src/Dispatcher.sol";
 import {State} from "../src/State.sol";
 import {StateGraph} from "../src/StateGraph.sol";
 
 import "./fixtures/TestActions.sol";
 import "./fixtures/TestRules.sol";
 import "./fixtures/TestStateUtils.sol";
+
 using StateTestUtils for State;
 
 contract ExampleDispatcher is Dispatcher, BaseDispatcher {
@@ -25,7 +19,6 @@ contract ExampleDispatcher is Dispatcher, BaseDispatcher {
 }
 
 contract BaseDispatcherTest is Test {
-
     State s;
     BaseDispatcher d;
 
@@ -41,10 +34,7 @@ contract BaseDispatcherTest is Test {
         d.registerRule(new LastWriteWinsRule("y"));
         d.dispatch(action);
 
-        assertEq(
-            s.getBytes(),
-            "y"
-        );
+        assertEq(s.getBytes(), "y");
     }
 
     function testActionArgs() public {
@@ -53,10 +43,7 @@ contract BaseDispatcherTest is Test {
         d.registerRule(new SetBytesRule());
         d.dispatch(action);
 
-        assertEq(
-            s.getBytes(),
-            "MAGIC_BYTES"
-        );
+        assertEq(s.getBytes(), "MAGIC_BYTES");
     }
 
     function testDispatchAsSender() public {
@@ -67,10 +54,7 @@ contract BaseDispatcherTest is Test {
         vm.prank(sender);
         d.dispatch(action);
 
-        assertEq(
-            s.getAddress(),
-            sender
-        );
+        assertEq(s.getAddress(), sender);
     }
 
     function testDispatchWithContext() public {
@@ -79,24 +63,21 @@ contract BaseDispatcherTest is Test {
 
         d.registerRouter(Router(router));
 
-        Context memory ctx = Context({ sender: sender, scopes: 0, clock: uint32(block.number) });
+        Context memory ctx = Context({sender: sender, scopes: 0, clock: uint32(block.number)});
         bytes memory action = abi.encodeCall(TestActions.SET_SENDER, ());
 
         d.registerRule(new LogSenderRule());
         vm.prank(router);
         d.dispatch(action, ctx);
 
-        assertEq(
-            s.getAddress(),
-            sender
-        );
+        assertEq(s.getAddress(), sender);
     }
 
     function testRevertUntrustedRouter() public {
         address router = vm.addr(0x88888);
         address sender = vm.addr(0x11111);
 
-        Context memory ctx = Context({ sender: sender, scopes: 0, clock: uint32(block.number) });
+        Context memory ctx = Context({sender: sender, scopes: 0, clock: uint32(block.number)});
         bytes memory action = abi.encodeCall(TestActions.SET_SENDER, ());
 
         d.registerRule(new LogSenderRule());
@@ -104,10 +85,6 @@ contract BaseDispatcherTest is Test {
         vm.prank(router);
         d.dispatch(action, ctx);
 
-        assertEq(
-            s.getAddress(),
-            address(0)
-        );
+        assertEq(s.getAddress(), address(0));
     }
-
 }

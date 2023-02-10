@@ -6,4 +6,3 @@ interface TestActions {
     function SET_SENDER() external;
     function SET_BYTES(bytes memory) external;
 }
-

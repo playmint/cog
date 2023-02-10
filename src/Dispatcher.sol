@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.13;
 
-import { State } from "./State.sol";
+import {State} from "./State.sol";
 
 enum ActionArgKind {
     BOOL,
@@ -35,21 +35,15 @@ uint32 constant SCOPE_FULL_ACCESS = 0xffff;
 // - scopes (a uint32 intended to be used as role/auth bitwise flags)
 struct Context {
     address sender; // action sender
-    uint32 scopes;  // authorized scopes
-    uint32 clock;   // block at time of action commit
-    // uint32 ?? - there's a little bit of room left
+    uint32 scopes; // authorized scopes
+    uint32 clock; // block at time of action commit
+        // uint32 ?? - there's a little bit of room left
 }
 
 // Dispatchers accept Actions and execute Rules to modify State
 interface Dispatcher {
-    event ActionRegistered(
-        address id,
-        string name
-    );
-    event ActionDispatched(
-        address indexed sender,
-        bytes32 actionNonce
-    );
+    event ActionRegistered(address id, string name);
+    event ActionDispatched(address indexed sender, bytes32 actionNonce);
 
     // dispatch(action, session) applies action with the supplied session
     // to the rules.
@@ -57,53 +51,27 @@ interface Dispatcher {
     // - session is contains data about the action sender
     // session data should be considered untrusted and implementations MUST
     // verify the session data or the sender before executing Rules.
-    function dispatch(
-        bytes calldata action,
-        Context calldata ctx
-    ) external;
+    function dispatch(bytes calldata action, Context calldata ctx) external;
 
     // same as dispatch above, but ctx is built from msg.sender
-    function dispatch(
-        bytes calldata action
-    ) external;
+    function dispatch(bytes calldata action) external;
 }
 
 // Routers accept "signed" Actions and forwards them to Dispatcher.dispatch
 // They might be a seperate contract or an extension of the Dispatcher
 interface Router {
-    function dispatch(
-        bytes calldata action,
-        bytes calldata sig
-    ) external;
+    function dispatch(bytes calldata action, bytes calldata sig) external;
 
-    function dispatch(
-        bytes[] calldata actions,
-        bytes[] calldata sig
-    ) external;
+    function dispatch(bytes[] calldata actions, bytes[] calldata sig) external;
 
-    function authorizeAddr(
-        Dispatcher dispatcher,
-        uint32 ttl,
-        uint32 scopes,
-        address addr
-    ) external;
+    function authorizeAddr(Dispatcher dispatcher, uint32 ttl, uint32 scopes, address addr) external;
 
-    function authorizeAddr(
-        Dispatcher dispatcher,
-        uint32 ttl,
-        uint32 scopes,
-        address addr,
-        bytes calldata sig
-    ) external;
+    function authorizeAddr(Dispatcher dispatcher, uint32 ttl, uint32 scopes, address addr, bytes calldata sig)
+        external;
 
-    function revokeAddr(
-        address addr
-    ) external;
+    function revokeAddr(address addr) external;
 
-    function revokeAddr(
-        address addr,
-        bytes calldata sig
-    ) external;
+    function revokeAddr(address addr, bytes calldata sig) external;
 }
 
 interface Rule {
@@ -182,7 +150,7 @@ contract BaseDispatcher is Dispatcher {
         if (!isRegisteredRouter(msg.sender)) {
             revert DispatchUntrustedSender();
         }
-        for (uint i=0; i<rules.length; i++) {
+        for (uint256 i = 0; i < rules.length; i++) {
             rules[i].reduce(state, action, ctx);
         }
         emit ActionDispatched(
@@ -191,17 +159,8 @@ contract BaseDispatcher is Dispatcher {
         );
     }
 
-    function dispatch(
-        bytes calldata action
-    ) public {
-        Context memory ctx = Context({
-            sender: msg.sender,
-            scopes: SCOPE_FULL_ACCESS,
-            clock: uint32(block.number)
-        });
+    function dispatch(bytes calldata action) public {
+        Context memory ctx = Context({sender: msg.sender, scopes: SCOPE_FULL_ACCESS, clock: uint32(block.number)});
         this.dispatch(action, ctx);
     }
-
 }
-
-
