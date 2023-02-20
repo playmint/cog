@@ -62,6 +62,10 @@ library CompoundKeyEncoder {
     function ADDRESS(bytes4 kindID, address addr) internal pure returns (bytes24) {
         return bytes24(abi.encodePacked(kindID, uint160(addr)));
     }
+
+    function STRING(bytes4 kindID, string memory id) internal pure returns (bytes24) {
+        return bytes24(abi.encodePacked(kindID, id));
+    }
 }
 
 library CompoundKeyDecoder {
@@ -110,6 +114,22 @@ library CompoundKeyDecoder {
 
     function ADDRESS(bytes24 id) internal pure returns (address) {
         return address(uint160(uint192(id)));
+    }
+
+    function STRING(bytes24 id) internal pure returns (string memory) {
+        // Find string length. Keys are fixed at 20 bytes so treat first 0 as null terminator
+        uint8 len;
+        while (len < 20 && id[4 + len] != 0) {
+            len++;
+        }
+
+        // Copy string bytes
+        bytes memory stringBytes = new bytes(len);
+        for (uint8 i = 0; i < len; i++) {
+            stringBytes[i] = id[4 + i];
+        }
+
+        return string(stringBytes);
     }
 }
 
