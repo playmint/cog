@@ -64,10 +64,7 @@ library CompoundKeyEncoder {
     }
 
     function STRING(bytes4 kindID, string memory id) internal pure returns (bytes24) {
-        return bytes24(abi.encodePacked(
-            kindID,
-            id
-        ));
+        return bytes24(abi.encodePacked(kindID, id));
     }
 }
 
@@ -125,13 +122,13 @@ library CompoundKeyDecoder {
         while (len < 20 && id[4 + len] != 0) {
             len++;
         }
-        
+
         // Copy string bytes
         bytes memory stringBytes = new bytes(len);
         for (uint8 i = 0; i < len; i++) {
             stringBytes[i] = id[4 + i];
         }
-        
+
         return string(stringBytes);
     }
 }
