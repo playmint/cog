@@ -52,6 +52,7 @@ contract BaseGameTest is Test {
         d.registerState(s);
         d.registerRule(new LogSenderRule());
         d.registerRule(new SetBytesRule());
+        d.registerRule(new AnnotateNode());
 
         vm.expectEmit(true, true, true, true);
         emit GameDeployed(address(d), address(s), address(r));
@@ -67,21 +68,40 @@ contract BaseGameTest is Test {
         game.getRouter().authorizeAddr(game.getDispatcher(), MAX_TTL, SCOPE_FULL_ACCESS, sessionAddr);
         vm.stopPrank();
 
-        // sign an action with the sessionKey
+        // encode annotations for the bundle
+        uint8 annotationID = 0;
+        bytes[] memory annotations = new bytes[](1);
+        annotations[annotationID] = bytes("the-zero-node");
+
+        // encode an action bundle
+        bytes[] memory actions = new bytes[](2);
+        actions[0] = abi.encodeCall(TestActions.SET_BYTES, ("MAGIC_BYTES"));
+        actions[1] = abi.encodeCall(TestActions.ANNOTATE_NODE, (annotationID));
+
+
+        // sign the action bundle with the sessionKey
         vm.startPrank(sessionAddr);
-        bytes memory action = abi.encodeCall(TestActions.SET_BYTES, ("MAGIC_BYTES"));
-        (uint8 v, bytes32 r, bytes32 s) = sign(action, sessionKey);
+        (uint8 v, bytes32 r, bytes32 s) = sign(actions, sessionKey);
         bytes memory sig = abi.encodePacked(r, s, v);
         vm.stopPrank();
 
-        // dispatch the signed action via a relayer
+        // add the action bundle to a routing batch
+        bytes[][] memory batchedActions = new bytes[][](1);
+        bytes[][] memory batchedAnnotations = new bytes[][](1);
+        bytes[] memory batchedSigs = new bytes[](1);
+        batchedActions[0] = actions;
+        batchedAnnotations[0] = annotations;
+        batchedSigs[0] = sig;
+
+        // dispatch the batch via a relayer
         vm.startPrank(relayAddr);
-        game.getRouter().dispatch(action, sig);
+        game.getRouter().dispatch(batchedActions, batchedAnnotations, batchedSigs);
         vm.stopPrank();
 
         // check that the state was modified as a reult of running
         // through the rules
         assertEq(game.getState().getBytes(), "MAGIC_BYTES");
+        assertEq(game.getState().getAnnotation(0x0, "name"), keccak256(bytes("the-zero-node")));
     }
 
     function testMetadata() public {
@@ -90,8 +110,8 @@ contract BaseGameTest is Test {
         assertEq(metadata.url, "http://localhost:3000/");
     }
 
-    function sign(bytes memory action, uint256 privateKey) private pure returns (uint8 v, bytes32 r, bytes32 s) {
-        bytes32 digest = keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n32", keccak256(action)));
+    function sign(bytes[] memory actions, uint256 privateKey) private pure returns (uint8 v, bytes32 r, bytes32 s) {
+        bytes32 digest = keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n32", keccak256(abi.encode(actions))));
         return vm.sign(privateKey, digest);
     }
 }

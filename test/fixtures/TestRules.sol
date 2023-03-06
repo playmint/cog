@@ -39,3 +39,13 @@ contract LogSenderRule is Rule {
         return s;
     }
 }
+
+contract AnnotateNode is Rule {
+    function reduce(State s, bytes calldata action, Context calldata ctx ) public returns (State) {
+        if (bytes4(action) == TestActions.ANNOTATE_NODE.selector) {
+            (uint8 annotationID) = abi.decode(action[4:], (uint8));
+            s.setAnnotation(0x0, "name", ctx.annotations[annotationID]);
+        }
+        return s;
+    }
+}

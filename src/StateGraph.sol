@@ -12,6 +12,7 @@ contract StateGraph is State {
     }
 
     mapping(bytes24 => mapping(bytes4 => mapping(uint8 => EdgeData))) edges;
+    mapping(bytes24 => mapping(bytes32 => bytes32)) annotations;
     mapping(address => bool) allowlist;
 
     constructor() {
@@ -44,6 +45,15 @@ contract StateGraph is State {
     {
         EdgeData storage e = edges[srcNodeID][relID][relKey];
         return (e.dstNodeID, e.weight);
+    }
+
+    function setAnnotation(bytes24 nodeID, string memory annotationLabel, bytes32 annotationDataKey) external {
+        annotations[nodeID][keccak256(bytes(annotationLabel))] = annotationDataKey;
+        emit State.AnnotationSet(nodeID, annotationLabel, annotationDataKey);
+    }
+
+    function getAnnotation(bytes24 nodeID, string memory annotationLabel) external view returns (bytes32) {
+        return annotations[nodeID][keccak256(bytes(annotationLabel))];
     }
 
     // TODO: allowlist only

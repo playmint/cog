@@ -138,6 +138,7 @@ interface State {
     event NodeTypeRegister(bytes4 id, string name, CompoundKeyKind keyKind);
     event EdgeSet(bytes4 relID, uint8 relKey, bytes24 srcNodeID, bytes24 dstNodeID, uint160 weight);
     event EdgeRemove(bytes4 relID, uint8 relKey, bytes24 srcNodeID);
+    event AnnotationSet(bytes24 nodeID, string annotationLabel, bytes32 annotationDataKey);
 
     function set(bytes4 relID, uint8 relKey, bytes24 srcNodeID, bytes24 dstNodeID, uint64 weight) external;
     function remove(bytes4 relID, uint8 relKey, bytes24 srcNodeID) external;
@@ -149,4 +150,11 @@ interface State {
     function registerNodeType(bytes4 kindID, string memory kindName, CompoundKeyKind keyKind) external;
     function registerEdgeType(bytes4 relID, string memory relName, WeightKind weightKind) external;
     function authorizeContract(address addr) external;
+
+    // an annotation is an on-chain tag that points to some off-chain data
+    // the annotationDataKey is hash, the preimage of the hash can be found
+    // in the transaction calldata. this allows for cost effcient storage of
+    // data blobs that are required by clients but not on-chain
+    function setAnnotation(bytes24 nodeID, string memory annotationLabel, bytes32 annotationDataKey) external;
+    function getAnnotation(bytes24 nodeID, string memory annotationLabel) external returns (bytes32 annotationDataKey);
 }

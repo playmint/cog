@@ -95,7 +95,7 @@ contract SessionRouter is Router {
     // | [!] CRITICAL TODO: there is currently no replay protection for session signed actions! |
     // +-----------------------------------------------------------------------------------------+
     //
-    function dispatch(bytes calldata action, bytes calldata sig) public {
+    function _dispatch(bytes[] calldata actions, bytes[] calldata annotations, bytes calldata sig) private {
         Session storage session;
         if (sig.length == 0) {
             // no signature provided, so we treat the sender as the session key
@@ -107,7 +107,7 @@ contract SessionRouter is Router {
             // this is the path for when a player is using a temporary
             // short lived session key in their client to sign actions
             address signer = ecrecover(
-                keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n32", keccak256(action))),
+                keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n32", keccak256(abi.encode(actions)))),
                 uint8(bytes1(sig[64:65])),
                 bytes32(sig[0:32]),
                 bytes32(sig[32:64])
@@ -121,15 +121,20 @@ contract SessionRouter is Router {
             revert SessionExpired();
         }
         // TODO: replay protection
-        Context memory ctx = Context({sender: session.owner, scopes: session.scopes, clock: uint32(block.number)});
+        Context memory ctx = Context({
+            sender: session.owner,
+            scopes: session.scopes,
+            clock: uint32(block.number),
+            annotations: hashAnnotations(annotations)
+        });
         // forward to the dispatcher registered with the session
-        session.dispatcher.dispatch(action, ctx);
+        session.dispatcher.dispatch(actions, ctx);
     }
 
     // dispatch (batched)
-    function dispatch(bytes[] calldata actions, bytes[] calldata sig) public {
+    function dispatch(bytes[][] calldata actions, bytes[][] calldata annotations, bytes[] calldata sig) public {
         for (uint256 i = 0; i < actions.length; i++) {
-            dispatch(actions[i], sig[i]);
+            _dispatch(actions[i], annotations[i], sig[i]);
         }
     }
 
@@ -141,5 +146,18 @@ contract SessionRouter is Router {
             revert SessionExpiryTooLong();
         }
         return uint32(block.number + ttl);
+    }
+
+
+    // annotations are blobs of data stored in the transaction calldata
+    // we take a hash of any annotations and pass the hash to the dispatcher
+    // the hash can be used as a reference to data that we can guarentee has been
+    // made available to off-chain clients
+    function hashAnnotations(bytes[] calldata annotations) private pure returns(bytes32[] memory) {
+        bytes32[] memory hashes = new bytes32[](annotations.length);
+        for (uint256 i = 0; i < annotations.length; i++) {
+            hashes[i] = keccak256(annotations[i]);
+        }
+        return hashes;
     }
 }
