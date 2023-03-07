@@ -18,7 +18,7 @@ contract StateGraphTest is Test {
     event NodeTypeRegister(bytes4 id, string name, CompoundKeyKind keyKind);
     event EdgeSet(bytes4 relID, uint8 relKey, bytes24 srcNodeID, bytes24 dstNodeID, uint160 weight);
     event EdgeRemove(bytes4 relID, uint8 relKey, bytes24 srcNodeID);
-    event AnnotationSet(bytes24 id, AnnotationKind kind, string label, bytes32 ref);
+    event AnnotationSet(bytes24 id, AnnotationKind kind, string label, bytes32 ref, string data);
 
     StateGraph internal state;
 
@@ -91,7 +91,7 @@ contract StateGraphTest is Test {
         string memory label = "ann";
         string memory data = "A_STRING_LONGER_THAN_32_BYTES_1234567890123456789012345678901234567890";
         vm.expectEmit(true, true, true, true, address(state));
-        emit AnnotationSet(nodeID, AnnotationKind.CALLDATA, label, keccak256(bytes(data)));
+        emit AnnotationSet(nodeID, AnnotationKind.CALLDATA, label, keccak256(bytes(data)), data);
         state.setAnnotation(nodeID, label, data);
     }
 }

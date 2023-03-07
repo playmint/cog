@@ -142,7 +142,7 @@ interface State {
     event NodeTypeRegister(bytes4 id, string name, CompoundKeyKind keyKind);
     event EdgeSet(bytes4 relID, uint8 relKey, bytes24 srcNodeID, bytes24 dstNodeID, uint160 weight);
     event EdgeRemove(bytes4 relID, uint8 relKey, bytes24 srcNodeID);
-    event AnnotationSet(bytes24 id, AnnotationKind kind, string label, bytes32 ref);
+    event AnnotationSet(bytes24 id, AnnotationKind kind, string label, bytes32 ref, string data);
 
     function set(bytes4 relID, uint8 relKey, bytes24 srcNodeID, bytes24 dstNodeID, uint64 weight) external;
     function remove(bytes4 relID, uint8 relKey, bytes24 srcNodeID) external;

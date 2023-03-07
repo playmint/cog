@@ -47,13 +47,10 @@ contract StateGraph is State {
         return (e.dstNodeID, e.weight);
     }
 
-    function setAnnotationRef(bytes24 nodeID, string memory label, bytes32 annotationRef) private {
-        annotations[nodeID][keccak256(bytes(label))] = annotationRef;
-        emit State.AnnotationSet(nodeID, AnnotationKind.CALLDATA, label, annotationRef);
-    }
-
     function setAnnotation(bytes24 nodeID, string memory label, string memory annotationData) external {
-        setAnnotationRef(nodeID, label, keccak256(bytes(annotationData)));
+        bytes32 annotationRef = keccak256(bytes(annotationData));
+        annotations[nodeID][keccak256(bytes(label))] = annotationRef;
+        emit State.AnnotationSet(nodeID, AnnotationKind.CALLDATA, label, annotationRef, annotationData);
     }
 
     function getAnnotationRef(bytes24 nodeID, string memory annotationLabel) external view returns (bytes32) {
