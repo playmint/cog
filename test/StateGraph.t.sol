@@ -2,7 +2,7 @@
 pragma solidity ^0.8.13;
 
 import "forge-std/Test.sol";
-import {State, WeightKind, CompoundKeyKind} from "../src/State.sol";
+import {State, WeightKind, CompoundKeyKind, AnnotationKind} from "../src/State.sol";
 import {StateGraph} from "../src/StateGraph.sol";
 
 interface Rel {
@@ -18,6 +18,7 @@ contract StateGraphTest is Test {
     event NodeTypeRegister(bytes4 id, string name, CompoundKeyKind keyKind);
     event EdgeSet(bytes4 relID, uint8 relKey, bytes24 srcNodeID, bytes24 dstNodeID, uint160 weight);
     event EdgeRemove(bytes4 relID, uint8 relKey, bytes24 srcNodeID);
+    event AnnotationSet(bytes24 id, AnnotationKind kind, string label, bytes32 ref);
 
     StateGraph internal state;
 
@@ -83,5 +84,14 @@ contract StateGraphTest is Test {
         vm.expectEmit(true, true, true, true, address(state));
         emit NodeTypeRegister(relID, relName, keyKind);
         state.registerNodeType(relID, relName, keyKind);
+    }
+
+    function testAnnotateNode() public {
+        bytes24 nodeID = bytes24(abi.encodePacked(Kind.Person.selector, uint64(1)));
+        string memory label = "ann";
+        string memory data = "A_STRING_LONGER_THAN_32_BYTES_1234567890123456789012345678901234567890";
+        vm.expectEmit(true, true, true, true, address(state));
+        emit AnnotationSet(nodeID, AnnotationKind.CALLDATA, label, keccak256(bytes(data)));
+        state.setAnnotation(nodeID, label, data);
     }
 }

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.13;
 
-import {State, WeightKind, CompoundKeyKind} from "./State.sol";
+import {State, WeightKind, CompoundKeyKind, AnnotationKind} from "./State.sol";
 
 error StateUnauthorizedSender();
 
@@ -49,7 +49,7 @@ contract StateGraph is State {
 
     function setAnnotationRef(bytes24 nodeID, string memory label, bytes32 annotationRef) private {
         annotations[nodeID][keccak256(bytes(label))] = annotationRef;
-        emit State.AnnotationSet(nodeID, label, annotationRef);
+        emit State.AnnotationSet(nodeID, AnnotationKind.CALLDATA, label, annotationRef);
     }
 
     function setAnnotation(bytes24 nodeID, string memory label, string memory annotationData) external {
