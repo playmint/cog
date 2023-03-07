@@ -5,5 +5,5 @@ interface TestActions {
     function NOOP() external;
     function SET_SENDER() external;
     function SET_BYTES(bytes memory) external;
-    function ANNOTATE_NODE(uint8 annotationID) external;
+    function ANNOTATE_NODE(string calldata annotationData) external;
 }

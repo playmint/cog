@@ -95,7 +95,7 @@ contract SessionRouter is Router {
     // | [!] CRITICAL TODO: there is currently no replay protection for session signed actions! |
     // +-----------------------------------------------------------------------------------------+
     //
-    function _dispatch(bytes[] calldata actions, bytes[] calldata annotations, bytes calldata sig) private {
+    function _dispatch(bytes[] calldata actions, bytes calldata sig) private {
         Session storage session;
         if (sig.length == 0) {
             // no signature provided, so we treat the sender as the session key
@@ -124,17 +124,16 @@ contract SessionRouter is Router {
         Context memory ctx = Context({
             sender: session.owner,
             scopes: session.scopes,
-            clock: uint32(block.number),
-            annotations: hashAnnotations(annotations)
+            clock: uint32(block.number)
         });
         // forward to the dispatcher registered with the session
         session.dispatcher.dispatch(actions, ctx);
     }
 
     // dispatch (batched)
-    function dispatch(bytes[][] calldata actions, bytes[][] calldata annotations, bytes[] calldata sig) public {
+    function dispatch(bytes[][] calldata actions, bytes[] calldata sig) public {
         for (uint256 i = 0; i < actions.length; i++) {
-            _dispatch(actions[i], annotations[i], sig[i]);
+            _dispatch(actions[i], sig[i]);
         }
     }
 

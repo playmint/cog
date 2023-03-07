@@ -68,15 +68,10 @@ contract BaseGameTest is Test {
         game.getRouter().authorizeAddr(game.getDispatcher(), MAX_TTL, SCOPE_FULL_ACCESS, sessionAddr);
         vm.stopPrank();
 
-        // encode annotations for the bundle
-        uint8 annotationID = 0;
-        bytes[] memory annotations = new bytes[](1);
-        annotations[annotationID] = bytes("the-zero-node");
-
         // encode an action bundle
         bytes[] memory actions = new bytes[](2);
         actions[0] = abi.encodeCall(TestActions.SET_BYTES, ("MAGIC_BYTES"));
-        actions[1] = abi.encodeCall(TestActions.ANNOTATE_NODE, (annotationID));
+        actions[1] = abi.encodeCall(TestActions.ANNOTATE_NODE, ("A_POTENTIALLY_REALLY_LONG_UTF8_STRING"));
 
 
         // sign the action bundle with the sessionKey
@@ -87,21 +82,19 @@ contract BaseGameTest is Test {
 
         // add the action bundle to a routing batch
         bytes[][] memory batchedActions = new bytes[][](1);
-        bytes[][] memory batchedAnnotations = new bytes[][](1);
         bytes[] memory batchedSigs = new bytes[](1);
         batchedActions[0] = actions;
-        batchedAnnotations[0] = annotations;
         batchedSigs[0] = sig;
 
         // dispatch the batch via a relayer
         vm.startPrank(relayAddr);
-        game.getRouter().dispatch(batchedActions, batchedAnnotations, batchedSigs);
+        game.getRouter().dispatch(batchedActions, batchedSigs);
         vm.stopPrank();
 
         // check that the state was modified as a reult of running
         // through the rules
         assertEq(game.getState().getBytes(), "MAGIC_BYTES");
-        assertEq(game.getState().getAnnotation(0x0, "name"), keccak256(bytes("the-zero-node")));
+        assertEq(game.getState().getAnnotationRef(0x0, "name"), keccak256(bytes("A_POTENTIALLY_REALLY_LONG_UTF8_STRING")));
     }
 
     function testMetadata() public {

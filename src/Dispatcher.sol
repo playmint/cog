@@ -37,7 +37,6 @@ struct Context {
     address sender; // action sender
     uint32 scopes; // authorized scopes
     uint32 clock; // block at time of action commit
-    bytes32[] annotations;
 }
 
 // Dispatchers accept Actions and execute Rules to modify State
@@ -56,14 +55,13 @@ interface Dispatcher {
 
     // same as dispatch above, but ctx is built from msg.sender
     function dispatch(bytes calldata actions) external;
-    function dispatch(bytes calldata actions, bytes[] calldata annotations) external;
-    function dispatch(bytes[] calldata actions, bytes[] calldata annotations) external;
+    function dispatch(bytes[] calldata actions) external;
 }
 
 // Routers accept "signed" Actions and forwards them to Dispatcher.dispatch
 // They might be a seperate contract or an extension of the Dispatcher
 interface Router {
-    function dispatch(bytes[][] calldata actions, bytes[][] calldata annotations, bytes[] calldata sig) external;
+    function dispatch(bytes[][] calldata actions, bytes[] calldata sig) external;
 
     function authorizeAddr(Dispatcher dispatcher, uint32 ttl, uint32 scopes, address addr) external;
 
@@ -167,42 +165,18 @@ contract BaseDispatcher is Dispatcher {
         }
     }
 
-    function dispatch(bytes calldata action, bytes[] calldata annotations) public {
-        Context memory ctx = Context({
-            sender: msg.sender,
-            scopes: SCOPE_FULL_ACCESS,
-            clock: uint32(block.number),
-            annotations: hashAnnotations(annotations)
-        });
-        this.dispatch(action, ctx);
-    }
-
     function dispatch(bytes calldata action) public {
         Context memory ctx = Context({
             sender: msg.sender,
             scopes: SCOPE_FULL_ACCESS,
-            clock: uint32(block.number),
-            annotations: new bytes32[](0)
+            clock: uint32(block.number)
         });
         this.dispatch(action, ctx);
     }
 
-    function dispatch(bytes[] calldata actions, bytes[] calldata annotations) public {
+    function dispatch(bytes[] calldata actions) public {
         for (uint256 i = 0; i < actions.length; i++) {
-            dispatch(actions[i], annotations);
+            dispatch(actions[i]);
         }
     }
-
-    // annotations are blobs of data stored in the transaction calldata
-    // we take a hash of any annotations and pass the hash to the dispatcher
-    // the hash can be used as a reference to data that we can guarentee has been
-    // made available to off-chain clients
-    function hashAnnotations(bytes[] calldata annotations) private pure returns(bytes32[] memory) {
-        bytes32[] memory hashes = new bytes32[](annotations.length);
-        for (uint256 i = 0; i < annotations.length; i++) {
-            hashes[i] = keccak256(annotations[i]);
-        }
-        return hashes;
-    }
-
 }

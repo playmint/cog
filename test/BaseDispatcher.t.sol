@@ -92,8 +92,7 @@ contract BaseDispatcherTest is Test {
         return Context({
             sender: sender,
             scopes: 0,
-            clock: uint32(block.number),
-            annotations: new bytes32[](0)
+            clock: uint32(block.number)
         });
     }
 }
