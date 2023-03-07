@@ -121,11 +121,7 @@ contract SessionRouter is Router {
             revert SessionExpired();
         }
         // TODO: replay protection
-        Context memory ctx = Context({
-            sender: session.owner,
-            scopes: session.scopes,
-            clock: uint32(block.number)
-        });
+        Context memory ctx = Context({sender: session.owner, scopes: session.scopes, clock: uint32(block.number)});
         // forward to the dispatcher registered with the session
         session.dispatcher.dispatch(actions, ctx);
     }
@@ -147,12 +143,11 @@ contract SessionRouter is Router {
         return uint32(block.number + ttl);
     }
 
-
     // annotations are blobs of data stored in the transaction calldata
     // we take a hash of any annotations and pass the hash to the dispatcher
     // the hash can be used as a reference to data that we can guarentee has been
     // made available to off-chain clients
-    function hashAnnotations(bytes[] calldata annotations) private pure returns(bytes32[] memory) {
+    function hashAnnotations(bytes[] calldata annotations) private pure returns (bytes32[] memory) {
         bytes32[] memory hashes = new bytes32[](annotations.length);
         for (uint256 i = 0; i < annotations.length; i++) {
             hashes[i] = keccak256(annotations[i]);

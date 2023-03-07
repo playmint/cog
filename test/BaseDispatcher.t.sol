@@ -89,10 +89,6 @@ contract BaseDispatcherTest is Test {
     }
 
     function newContext(address sender) private view returns (Context memory) {
-        return Context({
-            sender: sender,
-            scopes: 0,
-            clock: uint32(block.number)
-        });
+        return Context({sender: sender, scopes: 0, clock: uint32(block.number)});
     }
 }

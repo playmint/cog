@@ -73,7 +73,6 @@ contract BaseGameTest is Test {
         actions[0] = abi.encodeCall(TestActions.SET_BYTES, ("MAGIC_BYTES"));
         actions[1] = abi.encodeCall(TestActions.ANNOTATE_NODE, ("A_POTENTIALLY_REALLY_LONG_UTF8_STRING"));
 
-
         // sign the action bundle with the sessionKey
         vm.startPrank(sessionAddr);
         (uint8 v, bytes32 r, bytes32 s) = sign(actions, sessionKey);
@@ -94,7 +93,9 @@ contract BaseGameTest is Test {
         // check that the state was modified as a reult of running
         // through the rules
         assertEq(game.getState().getBytes(), "MAGIC_BYTES");
-        assertEq(game.getState().getAnnotationRef(0x0, "name"), keccak256(bytes("A_POTENTIALLY_REALLY_LONG_UTF8_STRING")));
+        assertEq(
+            game.getState().getAnnotationRef(0x0, "name"), keccak256(bytes("A_POTENTIALLY_REALLY_LONG_UTF8_STRING"))
+        );
     }
 
     function testMetadata() public {

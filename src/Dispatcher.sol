@@ -166,11 +166,7 @@ contract BaseDispatcher is Dispatcher {
     }
 
     function dispatch(bytes calldata action) public {
-        Context memory ctx = Context({
-            sender: msg.sender,
-            scopes: SCOPE_FULL_ACCESS,
-            clock: uint32(block.number)
-        });
+        Context memory ctx = Context({sender: msg.sender, scopes: SCOPE_FULL_ACCESS, clock: uint32(block.number)});
         this.dispatch(action, ctx);
     }
 
