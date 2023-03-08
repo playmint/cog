@@ -26,17 +26,20 @@ jobs:
           version: nightly
 
       - name: build
+        working-directory: contracts
         run: |
           forge --version
           forge build --sizes
         id: build
 
       - name: test
+        working-directory: contracts
         run: |
           forge test -vvv
         id: test
 
       - name: fmt
+        working-directory: contracts
         run: |
           forge fmt --check
         id: fmt
