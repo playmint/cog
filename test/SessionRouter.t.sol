@@ -9,7 +9,6 @@ import {
     SessionRouter,
     SessionUnauthorized,
     PREFIX_MESSAGE,
-    AUTHEN_MESSAGE,
     REVOKE_MESSAGE
 } from "../src/SessionRouter.sol";
 
@@ -22,6 +21,7 @@ using StateTestUtils for State;
 import {LibString} from "../src/utils/LibString.sol";
 
 using {LibString.toString} for uint256;
+using LibString for address;
 
 contract ExampleDispatcher is Dispatcher, BaseDispatcher {
     constructor(State s) BaseDispatcher() {
@@ -79,21 +79,28 @@ contract SessionRouterTest is Test {
     }
 
     function testAuthorizeAddrWithSignerAsOwner() public {
-        vm.prank(ownerAddr);
-        router.authorizeAddr(dispatcher, 0, 0, sessionAddr);
+        // expected auth message
+        bytes memory authMessage = abi.encodePacked(
+            "Welcome!",
+            "\n\nThis site is requesting permission to create a temporary session key.",
+            "\n\nSigning this message will not incur any fees.",
+            "\n\nValid: 5 blocks",
+            "\n\nSession: ",
+            sessionAddr.toHexString()
+        );
 
         // owner signs the message authorizing the session
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(
             ownerKey,
             keccak256(
-                abi.encodePacked(PREFIX_MESSAGE, (AUTHEN_MESSAGE.length + 20).toString(), AUTHEN_MESSAGE, sessionAddr)
+                abi.encodePacked(PREFIX_MESSAGE, authMessage.length.toString(), authMessage)
             )
         );
         bytes memory sig = abi.encodePacked(r, s, v);
 
         // relay submits the auth request on behalf of owner
         vm.prank(relayAddr);
-        router.authorizeAddr(dispatcher, 0, 0, sessionAddr, sig);
+        router.authorizeAddr(dispatcher, 5, 0, sessionAddr, sig);
 
         // should now be able to use sessionKey to act as owner
         dispatchSigned(sessionKey);

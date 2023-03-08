@@ -7,10 +7,12 @@ import {Context, Router, Dispatcher} from "./Dispatcher.sol";
 import {LibString} from "../src/utils/LibString.sol";
 
 using {LibString.toString} for uint256;
+using LibString for address;
+using LibString for uint32;
 
 bytes constant PREFIX_MESSAGE = "\x19Ethereum Signed Message:\n";
-bytes constant AUTHEN_MESSAGE = "You are signing in with session: ";
 bytes constant REVOKE_MESSAGE = "You are signing out of session: ";
+
 
 error SessionExpiryTooLong();
 error SessionUnauthorized();
@@ -33,23 +35,35 @@ contract SessionRouter is Router {
 
     mapping(address => Session) public sessions;
 
+    function getAuthMessage(uint32 ttl, uint32 /*scopes*/, address sessionAddr) internal pure returns (bytes memory) {
+        return abi.encodePacked(
+            "Welcome!",
+            "\n\nThis site is requesting permission to create a temporary session key.",
+            "\n\nSigning this message will not incur any fees.",
+            "\n\nValid: ", ttl.toString(), " blocks",
+            "\n\nSession: ",
+            sessionAddr.toHexString()
+        );
+    }
+
     // authorizeKey delegates permissions to key to act as msg.sender when talking to dispatcher
-    function authorizeAddr(Dispatcher dispatcher, uint32 ttl, uint32 scopes, address addr) public {
-        _authorizeAddr(dispatcher, ttl, scopes, addr, msg.sender);
+    function authorizeAddr(Dispatcher dispatcher, uint32 ttl, uint32 scopes, address sessionAddr) public {
+        _authorizeAddr(dispatcher, ttl, scopes, sessionAddr, msg.sender);
     }
 
     // authorizeKey delegates permissions to key to act as the signer of v/r/s when talking to dispatcher
-    function authorizeAddr(Dispatcher dispatcher, uint32 ttl, uint32 scopes, address addr, bytes calldata sig) public {
-        address owner = ecrecover(
-            keccak256(abi.encodePacked(PREFIX_MESSAGE, (AUTHEN_MESSAGE.length + 20).toString(), AUTHEN_MESSAGE, addr)),
+    function authorizeAddr(Dispatcher dispatcher, uint32 ttl, uint32 scopes, address sessionAddr, bytes calldata sig) public {
+        bytes memory authMessage = getAuthMessage(ttl, scopes, sessionAddr);
+        address ownerAddr = ecrecover(
+            keccak256(abi.encodePacked(PREFIX_MESSAGE, authMessage.length.toString(), authMessage)),
             uint8(bytes1(sig[64:65])),
             bytes32(sig[0:32]),
             bytes32(sig[32:64])
         );
-        if (owner == address(0)) {
+        if (ownerAddr == address(0)) {
             revert SessionUnauthorized();
         }
-        _authorizeAddr(dispatcher, ttl, scopes, addr, owner);
+        _authorizeAddr(dispatcher, ttl, scopes, sessionAddr, ownerAddr);
     }
 
     function _authorizeAddr(Dispatcher dispatcher, uint32 ttl, uint32 scopes, address sessionAddr, address ownerAddr)
