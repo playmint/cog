@@ -44,7 +44,7 @@ contract AnnotateNode is Rule {
     function reduce(State s, bytes calldata action, Context calldata /*ctx*/ ) public returns (State) {
         if (bytes4(action) == TestActions.ANNOTATE_NODE.selector) {
             (string memory data) = abi.decode(action[4:], (string));
-            s.setAnnotation(0x0, "name", data);
+            s.annotate(0x0, "name", data);
         }
         return s;
     }

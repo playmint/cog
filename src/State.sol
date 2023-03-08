@@ -158,6 +158,5 @@ interface State {
     // not available on-chain, only a content addressable reference to it.
     // indexers/clients are expected to watch for AnnotationSet event and store
     // the annotationData for later lookup
-    function setAnnotation(bytes24 nodeID, string memory label, string memory annotationData) external;
-    function getAnnotationRef(bytes24 nodeID, string memory label) external returns (bytes32 annotationRef);
+    function annotate(bytes24 nodeID, string memory label, string memory annotationData) external;
 }

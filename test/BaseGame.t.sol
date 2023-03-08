@@ -34,6 +34,7 @@ contract BaseGameTest is Test {
     event GameDeployed(address dispatcherAddr, address stateAddr, address routerAddr);
 
     Game game;
+    StateGraph state;
 
     uint256 ownerKey = 0xA11CE;
     address ownerAddr = vm.addr(ownerKey);
@@ -45,19 +46,19 @@ contract BaseGameTest is Test {
     address relayAddr = vm.addr(relayKey);
 
     function setUp() public {
-        State s = new StateGraph();
+        state = new StateGraph();
         SessionRouter r = new SessionRouter();
         BaseDispatcher d = new BaseDispatcher();
         d.registerRouter(r);
-        d.registerState(s);
+        d.registerState(state);
         d.registerRule(new LogSenderRule());
         d.registerRule(new SetBytesRule());
         d.registerRule(new AnnotateNode());
 
         vm.expectEmit(true, true, true, true);
-        emit GameDeployed(address(d), address(s), address(r));
+        emit GameDeployed(address(d), address(state), address(r));
 
-        game = new ExampleGame(s, d, r);
+        game = new ExampleGame(state, d, r);
     }
 
     // Ensure that we can setup sessions, dispatch signed actions and
@@ -94,7 +95,7 @@ contract BaseGameTest is Test {
         // through the rules
         assertEq(game.getState().getBytes(), "MAGIC_BYTES");
         assertEq(
-            game.getState().getAnnotationRef(0x0, "name"), keccak256(bytes("A_POTENTIALLY_REALLY_LONG_UTF8_STRING"))
+            state.getAnnotationRef(0x0, "name"), keccak256(bytes("A_POTENTIALLY_REALLY_LONG_UTF8_STRING"))
         );
     }
 

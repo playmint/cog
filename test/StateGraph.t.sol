@@ -92,6 +92,6 @@ contract StateGraphTest is Test {
         string memory data = "A_STRING_LONGER_THAN_32_BYTES_1234567890123456789012345678901234567890";
         vm.expectEmit(true, true, true, true, address(state));
         emit AnnotationSet(nodeID, AnnotationKind.CALLDATA, label, keccak256(bytes(data)), data);
-        state.setAnnotation(nodeID, label, data);
+        state.annotate(nodeID, label, data);
     }
 }

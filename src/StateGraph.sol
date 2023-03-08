@@ -47,7 +47,7 @@ contract StateGraph is State {
         return (e.dstNodeID, e.weight);
     }
 
-    function setAnnotation(bytes24 nodeID, string memory label, string memory annotationData) external {
+    function annotate(bytes24 nodeID, string memory label, string memory annotationData) external {
         bytes32 annotationRef = keccak256(bytes(annotationData));
         annotations[nodeID][keccak256(bytes(label))] = annotationRef;
         emit State.AnnotationSet(nodeID, AnnotationKind.CALLDATA, label, annotationRef, annotationData);
