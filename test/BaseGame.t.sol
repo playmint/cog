@@ -94,9 +94,7 @@ contract BaseGameTest is Test {
         // check that the state was modified as a reult of running
         // through the rules
         assertEq(game.getState().getBytes(), "MAGIC_BYTES");
-        assertEq(
-            state.getAnnotationRef(0x0, "name"), keccak256(bytes("A_POTENTIALLY_REALLY_LONG_UTF8_STRING"))
-        );
+        assertEq(state.getAnnotationRef(0x0, "name"), keccak256(bytes("A_POTENTIALLY_REALLY_LONG_UTF8_STRING")));
     }
 
     function testMetadata() public {
