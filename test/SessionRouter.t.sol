@@ -5,12 +5,7 @@ import "forge-std/Test.sol";
 import {BaseDispatcher, Dispatcher, DispatchUntrustedSender, Rule, Context} from "../src/Dispatcher.sol";
 import {State} from "../src/State.sol";
 import {StateGraph} from "../src/StateGraph.sol";
-import {
-    SessionRouter,
-    SessionUnauthorized,
-    PREFIX_MESSAGE,
-    REVOKE_MESSAGE
-} from "../src/SessionRouter.sol";
+import {SessionRouter, SessionUnauthorized, PREFIX_MESSAGE, REVOKE_MESSAGE} from "../src/SessionRouter.sol";
 
 import "./fixtures/TestActions.sol";
 import "./fixtures/TestRules.sol";
@@ -90,12 +85,8 @@ contract SessionRouterTest is Test {
         );
 
         // owner signs the message authorizing the session
-        (uint8 v, bytes32 r, bytes32 s) = vm.sign(
-            ownerKey,
-            keccak256(
-                abi.encodePacked(PREFIX_MESSAGE, authMessage.length.toString(), authMessage)
-            )
-        );
+        (uint8 v, bytes32 r, bytes32 s) =
+            vm.sign(ownerKey, keccak256(abi.encodePacked(PREFIX_MESSAGE, authMessage.length.toString(), authMessage)));
         bytes memory sig = abi.encodePacked(r, s, v);
 
         // relay submits the auth request on behalf of owner

@@ -13,7 +13,6 @@ using LibString for uint32;
 bytes constant PREFIX_MESSAGE = "\x19Ethereum Signed Message:\n";
 bytes constant REVOKE_MESSAGE = "You are signing out of session: ";
 
-
 error SessionExpiryTooLong();
 error SessionUnauthorized();
 error SessionExpired();
@@ -35,12 +34,14 @@ contract SessionRouter is Router {
 
     mapping(address => Session) public sessions;
 
-    function getAuthMessage(uint32 ttl, uint32 /*scopes*/, address sessionAddr) internal pure returns (bytes memory) {
+    function getAuthMessage(uint32 ttl, uint32, /*scopes*/ address sessionAddr) internal pure returns (bytes memory) {
         return abi.encodePacked(
             "Welcome!",
             "\n\nThis site is requesting permission to create a temporary session key.",
             "\n\nSigning this message will not incur any fees.",
-            "\n\nValid: ", ttl.toString(), " blocks",
+            "\n\nValid: ",
+            ttl.toString(),
+            " blocks",
             "\n\nSession: ",
             sessionAddr.toHexString()
         );
@@ -52,7 +53,9 @@ contract SessionRouter is Router {
     }
 
     // authorizeKey delegates permissions to key to act as the signer of v/r/s when talking to dispatcher
-    function authorizeAddr(Dispatcher dispatcher, uint32 ttl, uint32 scopes, address sessionAddr, bytes calldata sig) public {
+    function authorizeAddr(Dispatcher dispatcher, uint32 ttl, uint32 scopes, address sessionAddr, bytes calldata sig)
+        public
+    {
         bytes memory authMessage = getAuthMessage(ttl, scopes, sessionAddr);
         address ownerAddr = ecrecover(
             keccak256(abi.encodePacked(PREFIX_MESSAGE, authMessage.length.toString(), authMessage)),
