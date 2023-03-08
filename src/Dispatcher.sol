@@ -62,7 +62,7 @@ interface Dispatcher {
 // They might be a seperate contract or an extension of the Dispatcher
 // A "bundle" here means; one or more actions all signed by the same session key
 interface Router {
-    function dispatch(bytes[][] calldata actionBundles, bytes[] calldata sig) external;
+    function dispatch(bytes[][] calldata actionBundles, bytes[] calldata bundleSignatures) external;
 
     function authorizeAddr(Dispatcher dispatcher, uint32 ttl, uint32 scopes, address addr) external;
 
