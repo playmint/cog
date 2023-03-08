@@ -1,0 +1,19 @@
+
+type ERC721Attribute {
+	display_type: String!
+    trait_type: String!
+    value: String!
+}
+
+type ERC721Metadata {
+    name: String!
+    description: String!
+    image: String!
+	image_data: String!
+	background_color: String!
+	animation_url: String!
+	youtube_url: String!
+    external_url: String!
+    attributes: [ERC721Attribute!]!
+}
+

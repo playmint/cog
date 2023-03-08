@@ -1,0 +1,12 @@
+# Default genqlient config; for full documentation see:
+# https://github.com/Khan/genqlient/blob/main/docs/genqlient.yaml
+schema: schema/*.graphqls
+operations:
+- test/integration/*.graphql
+generated: test/integration/queries_test.go
+package: integration_test
+bindings:
+  BigInt:
+    type: github.com/playmint/ds-node/pkg/api/model.BigInt
+    marshaler: github.com/playmint/ds-node/pkg/api/model.ClientMarshalBigInt
+    unmarshaler: github.com/playmint/ds-node/pkg/api/model.ClientUnmarshalBigInt

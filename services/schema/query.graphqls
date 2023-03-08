@@ -1,0 +1,5 @@
+
+type Query {
+	game(id: ID!): Game!
+	games: [Game!]!
+}

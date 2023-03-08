@@ -1,0 +1,15 @@
+
+type Dispatcher {
+	id: ID!
+}
+
+type Game {
+	id: ID! # this is the game contract addr
+	name: String!
+	url: String!
+
+	dispatcher: Dispatcher!
+	state: State!
+	router: Router!
+}
+

@@ -1,0 +1,8 @@
+
+
+type Subscription {
+	state(gameID: ID!): State
+	transaction(gameID: ID!, owner: String): ActionTransaction!
+	session(gameID: ID!, owner: String): Session!
+}
+

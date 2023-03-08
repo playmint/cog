@@ -1,0 +1,22 @@
+name: check-services
+
+on:
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    name: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-go@v3
+        with:
+          go-version: '1.19'
+      - uses: actions/checkout@v3
+      - name: fmt
+        working-directory: services
+        run: if [ "$(gofmt -s -l . | wc -l)" -gt 0 ]; then exit 1; fi
+        if: matrix.os == 'ubuntu-latest'
+      - name: test
+        working-directory: services
+        run: go test -race ./pkg/... ./cmd/...
