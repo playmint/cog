@@ -1,4 +1,4 @@
-name: check-services-lint
+name: check-services
 on:
   pull_request:
 permissions:
@@ -7,7 +7,7 @@ permissions:
   # pull-requests: read
 jobs:
   golangci:
-    name: services-lint
+    name: lint
     runs-on: ubuntu-latest
     steps:
       - uses: actions/setup-go@v3

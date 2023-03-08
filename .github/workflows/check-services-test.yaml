@@ -1,4 +1,4 @@
-name: check-services-test
+name: check-services
 
 on:
   pull_request:
@@ -6,7 +6,7 @@ on:
 
 jobs:
   test:
-    name: services-test
+    name: test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/setup-go@v3
