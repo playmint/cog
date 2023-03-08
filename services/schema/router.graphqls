@@ -1,0 +1,43 @@
+enum ActionTransactionStatus {
+	UNKNOWN
+	PENDING
+	SUCCESS
+	FAILED
+}
+
+type ActionBatch {
+	id: ID!
+	tx: String # the real transaction hash
+	status: ActionTransactionStatus!
+	transactions: [ActionTransaction!]!
+	block: Int # only available if status==SUCCESS
+}
+
+type ActionTransaction {
+	id: ID! # this is currently the same as sig, but might not be in future
+	payload: [String!]!
+	sig: String!
+	owner: String!
+	router: Router!
+	batch: ActionBatch!
+	status: ActionTransactionStatus! # same as batch.status
+}
+
+type SessionScope {
+	FullAccess: Boolean! # haven't given permissions much thought yet so this is just illustrative
+}
+
+type Session {
+	id: ID! # this id is the session public key address
+	owner: String! # the address this session is acting as
+	scope: SessionScope!
+	expires: Int! # the block when this session becomes invalid
+}
+
+type Router {
+	id: ID! # contract address of Router
+	sessions(owner: String): [Session!]! @goField(forceResolver: true)
+	session(id: ID!): Session @goField(forceResolver: true)
+	transactions(owner: String, status: [ActionTransactionStatus!]): [ActionTransaction!]! @goField(forceResolver: true)
+	transaction(id: ID!): ActionTransaction @goField(forceResolver: true)
+}

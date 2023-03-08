@@ -1,0 +1,251 @@
+scalar BigInt
+
+"""
+match condition for traversing/filtering the graph.
+"""
+input Match {
+	"""
+	ids only match if node is any of these ids, if empty match any id
+	"""
+	ids: [String!]
+
+	"""
+	via only follow edges of these rel types, if empty follow all edges
+	"""
+	via: [RelMatch!]
+
+	"""
+	kinds only matches if node kind is any of these kinds, if empty match any kind
+	"""
+	kinds: [String!]
+
+	"""
+	has only matches nodes that directly have the Rel, similar to via but subtle difference.
+	given the graph...
+
+		A --HAS_RED--> B --HAS_BLUE--> C
+		A --HAS_BLUE--> Y --HAS_RED--> Z
+
+	match(via: ["HAS_RED", "HAS_BLUE"]) would return B,C,Y,Z
+	match(via: ["HAS_RED", "HAS_BLUE"], has: ["HAS_RED"]) would return B,Z
+	"""
+	has: [RelMatch!]
+
+	"""
+	`limit` stops matches after that many edges have been collected
+	"""
+	limit: Int
+}
+
+"""
+RelMatchDirection indicates a direction of the relationship to match.  Edges
+are directional (they have a src node on one end and a dst node on the other)
+Sometimes we want to traverse the graph following this direction, sometimes we
+want to traverse in the oppersite direction, and sometimes it is purely the
+fact that two nodes are connected that we care about.
+"""
+enum RelMatchDirection {
+	IN
+	OUT
+	BOTH
+}
+
+"""
+RelMatch configures the types of edges that can be matched.
+
+rel is the human friendly name of the relationship.
+
+dir is either IN/OUT/BOTH and ditactes if we consider the edge pointing in an
+outbound or inbound direction from this node.
+"""
+input RelMatch {
+	rel: String!
+	dir: RelMatchDirection
+}
+
+type State {
+	id: ID! # contract address of State
+	block: Int! @goField(forceResolver: true) # block number of last seen update
+
+    """
+    nodes returns any nodes that match the Match filter.
+    """
+	nodes(match: Match): [Node!]! @goField(forceResolver:true)
+
+    """
+    node returns the first node that mates the Match filter.
+    """
+	node(match: Match): Node @goField(forceResolver:true)
+}
+
+type Node {
+    """
+    the full globally unique id of the node. see `splitID` for extracting
+    useful parts from the id.
+    """
+    id: ID!
+
+    """
+    the full id is made up of 4 bytes of "kind" + 8 bytes of user defined keys.
+    sometimes useful data is stored in the last 8 bytes, like maybe a smaller
+    identifier, or a timestamp, or multiple sub keys. keys extracts these little
+    subkeys from the big id. How many keys are extracted is ditacted by the
+    CompoundKeyKind value set on the state contract during registerNodeType
+    """
+    keys: [BigInt!]!
+
+    """
+    `key` is the same as `keys` but it assumes key is a single large value
+	as so is returned as a hex encoded string.
+    """
+    key: BigInt
+
+	"""
+	annotations are off-chain data attached to nodes that are guarenteed
+	to have been made available to all clients, but are not usable within logic.
+	for example; a "name" might be an annotation because there is no logic on-chain
+	that expects to verify the name OR a node might be annotated with some JSON
+	meatadata containing static details for a client to display. Since values
+	are stored only in calldata (not in state storage), values can be larger than
+	usually cost-effective for an equivilent value stored in state.
+	"""
+	annotations: [Annotation]!
+
+    """
+    nodes have a "kind" label, it is the human friendly decoding of the first 4
+    bytes of the id. See `id` and `keys`. This value is discovered based on the
+    value set on the state contract via registerNodeType.
+    """
+    kind: String!
+
+    """
+    fetch the DISTINCT nodes by traversing the graph from this node and applying the match
+    filter.
+    """
+    nodes(match: Match): [Node!]!
+
+    """
+    same as `nodes`, but only returns the first match
+    """
+    node(match: Match): Node
+
+    """
+    fetch edges by traversing the graph from this node and applying the match
+    filter.
+    """
+    edges(match: Match): [Edge!]!
+
+    """
+    same as `edges`, but only returns the first match
+    """
+    edge(match: Match): Edge
+
+    """
+    `value` operates exactly as `edge` but instead of returning the Edge it
+    returns the weight value of that edge.
+    """
+    value(match: Match): Int
+
+    """
+    `sum` operates like `edges` but instead of returning the edges, it sums up
+    all the weights of the matched edges.
+    """
+    sum(match: Match): Int!
+
+    """
+    `count` operates like `edges` but instead of returning the edges, it
+    returns the number of matched edges.
+    """
+    count(match: Match): Int!
+}
+
+"""
+Represents a virtual visit of a node on the graph. True edges have a source
+node and destination node. But when querying the graph, we may travel along
+edges in any direction. Edge represents our position at a node along
+with the edge that we followed.
+"""
+type Edge {
+  """
+  the node on the `dir` end of this edge.
+  """
+  node: Node!
+
+  """
+  `weight` is the value stored in the edge
+  """
+  weight: Int!
+
+  """
+  `key` is the numeric key that uniquely identifies this edge from other edges
+  of the same `rel` type. It is a small uint8 number, but it is not necasarily
+  a sequential index. Many `rel` types do not allow for multiple outbound edges
+  of the same type, in which case this will be 0.
+  """
+  key: Int!
+
+  """
+  rel is the human friendly name of the relationship.
+  """
+  rel: String!
+
+  """
+  `dir` indicates which "end" of the edge `node` is pointing to.
+  If we followed an outbound edge, then `dir` would be OUT and `node` would be referencing the node at the "destination" end of the edge.
+  If we followed an inbound edge, then `dir` would be IN and `node` would be referencing the node at the "source" end of the edge.
+  """
+  dir: RelMatchDirection!
+}
+
+enum AttributeKind {
+	BOOL
+	INT8
+	INT16
+	INT32
+	INT64
+	INT128
+	INT256
+	INT
+	UINT8
+	UINT16
+	UINT32
+	UINT64
+	UINT128
+	UINT256
+	BYTES
+	STRING
+	ADDRESS
+	BYTES4
+	BOOL_ARRAY
+	INT8_ARRAY
+	INT16_ARRAY
+	INT32_ARRAY
+	INT64_ARRAY
+	INT128_ARRAY
+	INT256_ARRAY
+	INT_ARRAY
+	UINT8_ARRAY
+	UINT16_ARRAY
+	UINT32_ARRAY
+	UINT64_ARRAY
+	UINT128_ARRAY
+	UINT256_ARRAY
+	BYTES_ARRAY
+	STRING_ARRAY
+}
+
+
+"""
+annotations are off-chain data attached to nodes that are guarenteed
+to have been made available to all clients, but are not usable within logic.
+for example; a "name" might be an annotation because there is no logic on-chain
+that expects to verify the name OR a node might be annotated with some JSON
+meatadata containing static details for a client to display. Since values
+are stored only in calldata (not in state storage), values can be larger than
+usually cost-effective for an equivilent value stored in state.
+"""
+type Annotation {
+	id: ID!
+	name: String!
+	value: String!
+}
