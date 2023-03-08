@@ -37,7 +37,6 @@ struct Context {
     address sender; // action sender
     uint32 scopes; // authorized scopes
     uint32 clock; // block at time of action commit
-        // uint32 ?? - there's a little bit of room left
 }
 
 // Dispatchers accept Actions and execute Rules to modify State
@@ -52,17 +51,18 @@ interface Dispatcher {
     // session data should be considered untrusted and implementations MUST
     // verify the session data or the sender before executing Rules.
     function dispatch(bytes calldata action, Context calldata ctx) external;
+    function dispatch(bytes[] calldata actions, Context calldata ctx) external;
 
     // same as dispatch above, but ctx is built from msg.sender
     function dispatch(bytes calldata action) external;
+    function dispatch(bytes[] calldata actions) external;
 }
 
-// Routers accept "signed" Actions and forwards them to Dispatcher.dispatch
+// Routers accept "signed" bundles of Actions and forwards them to Dispatcher.dispatch
 // They might be a seperate contract or an extension of the Dispatcher
+// A "bundle" here means; one or more actions all signed by the same session key
 interface Router {
-    function dispatch(bytes calldata action, bytes calldata sig) external;
-
-    function dispatch(bytes[] calldata actions, bytes[] calldata sig) external;
+    function dispatch(bytes[][] calldata actionBundles, bytes[] calldata bundleSignatures) external;
 
     function authorizeAddr(Dispatcher dispatcher, uint32 ttl, uint32 scopes, address addr) external;
 
@@ -159,8 +159,21 @@ contract BaseDispatcher is Dispatcher {
         );
     }
 
+    // dispatch from router trusted context
+    function dispatch(bytes[] calldata actions, Context calldata ctx) public {
+        for (uint256 i = 0; i < actions.length; i++) {
+            dispatch(actions[i], ctx);
+        }
+    }
+
     function dispatch(bytes calldata action) public {
         Context memory ctx = Context({sender: msg.sender, scopes: SCOPE_FULL_ACCESS, clock: uint32(block.number)});
         this.dispatch(action, ctx);
+    }
+
+    function dispatch(bytes[] calldata actions) public {
+        for (uint256 i = 0; i < actions.length; i++) {
+            dispatch(actions[i]);
+        }
     }
 }

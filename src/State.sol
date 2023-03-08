@@ -28,6 +28,8 @@ enum CompoundKeyKind {
     STRING // key is an 20 byte string
 }
 
+enum AnnotationKind {CALLDATA}
+
 library CompoundKeyEncoder {
     function UINT64(bytes4 kindID, uint64 key) internal pure returns (bytes24) {
         return bytes24(abi.encodePacked(kindID, uint96(0), key));
@@ -138,6 +140,7 @@ interface State {
     event NodeTypeRegister(bytes4 id, string name, CompoundKeyKind keyKind);
     event EdgeSet(bytes4 relID, uint8 relKey, bytes24 srcNodeID, bytes24 dstNodeID, uint160 weight);
     event EdgeRemove(bytes4 relID, uint8 relKey, bytes24 srcNodeID);
+    event AnnotationSet(bytes24 id, AnnotationKind kind, string label, bytes32 ref, string data);
 
     function set(bytes4 relID, uint8 relKey, bytes24 srcNodeID, bytes24 dstNodeID, uint64 weight) external;
     function remove(bytes4 relID, uint8 relKey, bytes24 srcNodeID) external;
@@ -149,4 +152,11 @@ interface State {
     function registerNodeType(bytes4 kindID, string memory kindName, CompoundKeyKind keyKind) external;
     function registerEdgeType(bytes4 relID, string memory relName, WeightKind weightKind) external;
     function authorizeContract(address addr) external;
+
+    // an annotation is an on-chain tag that points to a (potentially large)
+    // string stored in transaction calldata. The content of annotations are
+    // not available on-chain, only a content addressable reference to it.
+    // indexers/clients are expected to watch for AnnotationSet event and store
+    // the annotationData for later lookup
+    function annotate(bytes24 nodeID, string memory label, string memory annotationData) external;
 }

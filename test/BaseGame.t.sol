@@ -34,6 +34,7 @@ contract BaseGameTest is Test {
     event GameDeployed(address dispatcherAddr, address stateAddr, address routerAddr);
 
     Game game;
+    StateGraph state;
 
     uint256 ownerKey = 0xA11CE;
     address ownerAddr = vm.addr(ownerKey);
@@ -45,18 +46,19 @@ contract BaseGameTest is Test {
     address relayAddr = vm.addr(relayKey);
 
     function setUp() public {
-        State s = new StateGraph();
+        state = new StateGraph();
         SessionRouter r = new SessionRouter();
         BaseDispatcher d = new BaseDispatcher();
         d.registerRouter(r);
-        d.registerState(s);
+        d.registerState(state);
         d.registerRule(new LogSenderRule());
         d.registerRule(new SetBytesRule());
+        d.registerRule(new AnnotateNode());
 
         vm.expectEmit(true, true, true, true);
-        emit GameDeployed(address(d), address(s), address(r));
+        emit GameDeployed(address(d), address(state), address(r));
 
-        game = new ExampleGame(s, d, r);
+        game = new ExampleGame(state, d, r);
     }
 
     // Ensure that we can setup sessions, dispatch signed actions and
@@ -67,21 +69,32 @@ contract BaseGameTest is Test {
         game.getRouter().authorizeAddr(game.getDispatcher(), MAX_TTL, SCOPE_FULL_ACCESS, sessionAddr);
         vm.stopPrank();
 
-        // sign an action with the sessionKey
+        // encode an action bundle
+        bytes[] memory actions = new bytes[](2);
+        actions[0] = abi.encodeCall(TestActions.SET_BYTES, ("MAGIC_BYTES"));
+        actions[1] = abi.encodeCall(TestActions.ANNOTATE_NODE, ("A_POTENTIALLY_REALLY_LONG_UTF8_STRING"));
+
+        // sign the action bundle with the sessionKey
         vm.startPrank(sessionAddr);
-        bytes memory action = abi.encodeCall(TestActions.SET_BYTES, ("MAGIC_BYTES"));
-        (uint8 v, bytes32 r, bytes32 s) = sign(action, sessionKey);
+        (uint8 v, bytes32 r, bytes32 s) = sign(actions, sessionKey);
         bytes memory sig = abi.encodePacked(r, s, v);
         vm.stopPrank();
 
-        // dispatch the signed action via a relayer
+        // add the action bundle to a routing batch
+        bytes[][] memory batchedActions = new bytes[][](1);
+        bytes[] memory batchedSigs = new bytes[](1);
+        batchedActions[0] = actions;
+        batchedSigs[0] = sig;
+
+        // dispatch the batch via a relayer
         vm.startPrank(relayAddr);
-        game.getRouter().dispatch(action, sig);
+        game.getRouter().dispatch(batchedActions, batchedSigs);
         vm.stopPrank();
 
         // check that the state was modified as a reult of running
         // through the rules
         assertEq(game.getState().getBytes(), "MAGIC_BYTES");
+        assertEq(state.getAnnotationRef(0x0, "name"), keccak256(bytes("A_POTENTIALLY_REALLY_LONG_UTF8_STRING")));
     }
 
     function testMetadata() public {
@@ -90,8 +103,8 @@ contract BaseGameTest is Test {
         assertEq(metadata.url, "http://localhost:3000/");
     }
 
-    function sign(bytes memory action, uint256 privateKey) private pure returns (uint8 v, bytes32 r, bytes32 s) {
-        bytes32 digest = keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n32", keccak256(action)));
+    function sign(bytes[] memory actions, uint256 privateKey) private pure returns (uint8 v, bytes32 r, bytes32 s) {
+        bytes32 digest = keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n32", keccak256(abi.encode(actions))));
         return vm.sign(privateKey, digest);
     }
 }

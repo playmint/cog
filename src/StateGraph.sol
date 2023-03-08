@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.13;
 
-import {State, WeightKind, CompoundKeyKind} from "./State.sol";
+import {State, WeightKind, CompoundKeyKind, AnnotationKind} from "./State.sol";
 
 error StateUnauthorizedSender();
 
@@ -12,6 +12,7 @@ contract StateGraph is State {
     }
 
     mapping(bytes24 => mapping(bytes4 => mapping(uint8 => EdgeData))) edges;
+    mapping(bytes24 => mapping(bytes32 => bytes32)) annotations;
     mapping(address => bool) allowlist;
 
     constructor() {
@@ -44,6 +45,16 @@ contract StateGraph is State {
     {
         EdgeData storage e = edges[srcNodeID][relID][relKey];
         return (e.dstNodeID, e.weight);
+    }
+
+    function annotate(bytes24 nodeID, string memory label, string memory annotationData) external {
+        bytes32 annotationRef = keccak256(bytes(annotationData));
+        annotations[nodeID][keccak256(bytes(label))] = annotationRef;
+        emit State.AnnotationSet(nodeID, AnnotationKind.CALLDATA, label, annotationRef, annotationData);
+    }
+
+    function getAnnotationRef(bytes24 nodeID, string memory annotationLabel) external view returns (bytes32) {
+        return annotations[nodeID][keccak256(bytes(annotationLabel))];
     }
 
     // TODO: allowlist only

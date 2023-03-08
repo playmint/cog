@@ -5,6 +5,9 @@ pragma solidity >=0.8.0;
 /// @author Solmate (https://github.com/transmissions11/solmate/blob/main/src/utils/LibString.sol)
 /// @author Modified from Solady (https://github.com/Vectorized/solady/blob/main/src/utils/LibString.sol)
 library LibString {
+    bytes16 private constant _SYMBOLS = "0123456789abcdef";
+    uint8 private constant _ADDRESS_LENGTH = 20;
+
     function toString(uint256 value) internal pure returns (string memory str) {
         /// @solidity memory-safe-assembly
         assembly {
@@ -52,5 +55,22 @@ library LibString {
             // Store the string's length at the start of memory allocated for our string.
             mstore(str, length)
         }
+    }
+
+    function toHexString(uint256 value, uint256 length) internal pure returns (string memory) {
+        bytes memory buffer = new bytes(2 * length + 2);
+        buffer[0] = "0";
+        buffer[1] = "x";
+        for (uint256 i = 2 * length + 1; i > 1; --i) {
+            buffer[i] = _SYMBOLS[value & 0xf];
+            value >>= 4;
+        }
+        require(value == 0, "Strings: hex length insufficient");
+        return string(buffer);
+    }
+
+    // address to NON-CHECKSUMED 0x prefixed hex string
+    function toHexString(address addr) internal pure returns (string memory) {
+        return toHexString(uint256(uint160(addr)), _ADDRESS_LENGTH);
     }
 }

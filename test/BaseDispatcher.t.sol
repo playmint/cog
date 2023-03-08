@@ -63,7 +63,7 @@ contract BaseDispatcherTest is Test {
 
         d.registerRouter(Router(router));
 
-        Context memory ctx = Context({sender: sender, scopes: 0, clock: uint32(block.number)});
+        Context memory ctx = newContext(sender);
         bytes memory action = abi.encodeCall(TestActions.SET_SENDER, ());
 
         d.registerRule(new LogSenderRule());
@@ -77,7 +77,7 @@ contract BaseDispatcherTest is Test {
         address router = vm.addr(0x88888);
         address sender = vm.addr(0x11111);
 
-        Context memory ctx = Context({sender: sender, scopes: 0, clock: uint32(block.number)});
+        Context memory ctx = newContext(sender);
         bytes memory action = abi.encodeCall(TestActions.SET_SENDER, ());
 
         d.registerRule(new LogSenderRule());
@@ -86,5 +86,9 @@ contract BaseDispatcherTest is Test {
         d.dispatch(action, ctx);
 
         assertEq(s.getAddress(), address(0));
+    }
+
+    function newContext(address sender) private view returns (Context memory) {
+        return Context({sender: sender, scopes: 0, clock: uint32(block.number)});
     }
 }

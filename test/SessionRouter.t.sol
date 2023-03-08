@@ -5,13 +5,7 @@ import "forge-std/Test.sol";
 import {BaseDispatcher, Dispatcher, DispatchUntrustedSender, Rule, Context} from "../src/Dispatcher.sol";
 import {State} from "../src/State.sol";
 import {StateGraph} from "../src/StateGraph.sol";
-import {
-    SessionRouter,
-    SessionUnauthorized,
-    PREFIX_MESSAGE,
-    AUTHEN_MESSAGE,
-    REVOKE_MESSAGE
-} from "../src/SessionRouter.sol";
+import {SessionRouter, SessionUnauthorized, PREFIX_MESSAGE, REVOKE_MESSAGE} from "../src/SessionRouter.sol";
 
 import "./fixtures/TestActions.sol";
 import "./fixtures/TestRules.sol";
@@ -22,6 +16,7 @@ using StateTestUtils for State;
 import {LibString} from "../src/utils/LibString.sol";
 
 using {LibString.toString} for uint256;
+using LibString for address;
 
 contract ExampleDispatcher is Dispatcher, BaseDispatcher {
     constructor(State s) BaseDispatcher() {
@@ -79,21 +74,24 @@ contract SessionRouterTest is Test {
     }
 
     function testAuthorizeAddrWithSignerAsOwner() public {
-        vm.prank(ownerAddr);
-        router.authorizeAddr(dispatcher, 0, 0, sessionAddr);
+        // expected auth message
+        bytes memory authMessage = abi.encodePacked(
+            "Welcome!",
+            "\n\nThis site is requesting permission to create a temporary session key.",
+            "\n\nSigning this message will not incur any fees.",
+            "\n\nValid: 5 blocks",
+            "\n\nSession: ",
+            sessionAddr.toHexString()
+        );
 
         // owner signs the message authorizing the session
-        (uint8 v, bytes32 r, bytes32 s) = vm.sign(
-            ownerKey,
-            keccak256(
-                abi.encodePacked(PREFIX_MESSAGE, (AUTHEN_MESSAGE.length + 20).toString(), AUTHEN_MESSAGE, sessionAddr)
-            )
-        );
+        (uint8 v, bytes32 r, bytes32 s) =
+            vm.sign(ownerKey, keccak256(abi.encodePacked(PREFIX_MESSAGE, authMessage.length.toString(), authMessage)));
         bytes memory sig = abi.encodePacked(r, s, v);
 
         // relay submits the auth request on behalf of owner
         vm.prank(relayAddr);
-        router.authorizeAddr(dispatcher, 0, 0, sessionAddr, sig);
+        router.authorizeAddr(dispatcher, 5, 0, sessionAddr, sig);
 
         // should now be able to use sessionKey to act as owner
         dispatchSigned(sessionKey);
@@ -141,20 +139,21 @@ contract SessionRouterTest is Test {
     // the LogSenderRule sets the state to the action's owner so we
     // can confirm what the action got processed as
     function dispatchSigned(uint256 privateKey) internal {
-        bytes memory action = abi.encodeCall(TestActions.SET_SENDER, ());
-        bytes32 digest = keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n32", keccak256(action)));
+        bytes[] memory actions = new bytes[](1);
+        actions[0] = abi.encodeCall(TestActions.SET_SENDER, ());
+        bytes32 digest = keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n32", keccak256(abi.encode(actions))));
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(privateKey, digest);
         bytes memory sig = abi.encodePacked(r, s, v);
 
         // initialize a batch
-        bytes[] memory actions = new bytes[](1);
-        bytes[] memory sigs = new bytes[](1);
+        bytes[][] memory batchedActions = new bytes[][](1);
+        bytes[] memory batchedSigs = new bytes[](1);
 
         // assign action into batch
-        actions[0] = action;
-        sigs[0] = sig;
+        batchedActions[0] = actions;
+        batchedSigs[0] = sig;
 
         vm.prank(relayAddr);
-        router.dispatch(actions, sigs);
+        router.dispatch(batchedActions, batchedSigs);
     }
 }
