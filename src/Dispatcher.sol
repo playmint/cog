@@ -51,17 +51,18 @@ interface Dispatcher {
     // session data should be considered untrusted and implementations MUST
     // verify the session data or the sender before executing Rules.
     function dispatch(bytes calldata action, Context calldata ctx) external;
-    function dispatch(bytes[] calldata action, Context calldata ctx) external;
+    function dispatch(bytes[] calldata actions, Context calldata ctx) external;
 
     // same as dispatch above, but ctx is built from msg.sender
-    function dispatch(bytes calldata actions) external;
+    function dispatch(bytes calldata action) external;
     function dispatch(bytes[] calldata actions) external;
 }
 
-// Routers accept "signed" Actions and forwards them to Dispatcher.dispatch
+// Routers accept "signed" bundles of Actions and forwards them to Dispatcher.dispatch
 // They might be a seperate contract or an extension of the Dispatcher
+// A "bundle" here means; one or more actions all signed by the same session key
 interface Router {
-    function dispatch(bytes[][] calldata actions, bytes[] calldata sig) external;
+    function dispatch(bytes[][] calldata actionBundles, bytes[] calldata sig) external;
 
     function authorizeAddr(Dispatcher dispatcher, uint32 ttl, uint32 scopes, address addr) external;
 
