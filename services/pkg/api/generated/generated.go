@@ -129,6 +129,7 @@ type ComplexityRoot struct {
 	}
 
 	Node struct {
+		Annotation  func(childComplexity int, name string) int
 		Annotations func(childComplexity int) int
 		Count       func(childComplexity int, match *model.Match) int
 		Edge        func(childComplexity int, match *model.Match) int
@@ -571,6 +572,18 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 		}
 
 		return e.complexity.Mutation.Signup(childComplexity, args["gameID"].(string), args["authorization"].(string)), true
+
+	case "Node.annotation":
+		if e.complexity.Node.Annotation == nil {
+			break
+		}
+
+		args, err := ec.field_Node_annotation_args(context.TODO(), rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Node.Annotation(childComplexity, args["name"].(string)), true
 
 	case "Node.annotations":
 		if e.complexity.Node.Annotations == nil {
@@ -1202,6 +1215,7 @@ type Node {
 	usually cost-effective for an equivilent value stored in state.
 	"""
 	annotations: [Annotation]!
+	annotation(name: String!): Annotation
 
     """
     nodes have a "kind" label, it is the human friendly decoding of the first 4
@@ -1496,6 +1510,21 @@ func (ec *executionContext) field_Mutation_signup_args(ctx context.Context, rawA
 		}
 	}
 	args["authorization"] = arg1
+	return args, nil
+}
+
+func (ec *executionContext) field_Node_annotation_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
+	var err error
+	args := map[string]interface{}{}
+	var arg0 string
+	if tmp, ok := rawArgs["name"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("name"))
+		arg0, err = ec.unmarshalNString2string(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["name"] = arg0
 	return args, nil
 }
 
@@ -3636,6 +3665,45 @@ func (ec *executionContext) _Node_annotations(ctx context.Context, field graphql
 	res := resTmp.([]*model.Annotation)
 	fc.Result = res
 	return ec.marshalNAnnotation2ᚕᚖgithubᚗcomᚋplaymintᚋdsᚑnodeᚋpkgᚋapiᚋmodelᚐAnnotation(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) _Node_annotation(ctx context.Context, field graphql.CollectedField, obj *model.Node) (ret graphql.Marshaler) {
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	fc := &graphql.FieldContext{
+		Object:     "Node",
+		Field:      field,
+		Args:       nil,
+		IsMethod:   true,
+		IsResolver: false,
+	}
+
+	ctx = graphql.WithFieldContext(ctx, fc)
+	rawArgs := field.ArgumentMap(ec.Variables)
+	args, err := ec.field_Node_annotation_args(ctx, rawArgs)
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	fc.Args = args
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Annotation(args["name"].(string)), nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		return graphql.Null
+	}
+	res := resTmp.(*model.Annotation)
+	fc.Result = res
+	return ec.marshalOAnnotation2ᚖgithubᚗcomᚋplaymintᚋdsᚑnodeᚋpkgᚋapiᚋmodelᚐAnnotation(ctx, field.Selections, res)
 }
 
 func (ec *executionContext) _Node_kind(ctx context.Context, field graphql.CollectedField, obj *model.Node) (ret graphql.Marshaler) {
@@ -6813,6 +6881,13 @@ func (ec *executionContext) _Node(ctx context.Context, sel ast.SelectionSet, obj
 			if out.Values[i] == graphql.Null {
 				invalids++
 			}
+		case "annotation":
+			innerFunc := func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Node_annotation(ctx, field, obj)
+			}
+
+			out.Values[i] = innerFunc(ctx)
+
 		case "kind":
 			innerFunc := func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Node_kind(ctx, field, obj)

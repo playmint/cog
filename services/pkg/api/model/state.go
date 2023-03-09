@@ -307,6 +307,15 @@ func (n *Node) Key() (*big.Int, error) {
 	return big.NewInt(0).SetBytes(id[4:]), nil
 }
 
+func (n *Node) Annotation(name string) *Annotation {
+	for _, ann := range n.Annotations() {
+		if ann.Name == name {
+			return ann
+		}
+	}
+	return nil
+}
+
 func (n *Node) Annotations() []*Annotation {
 	annotations := []*Annotation{}
 	labels, ok := n.g.labels.Get(n.ID)

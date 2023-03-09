@@ -110,6 +110,7 @@ type Node {
 	usually cost-effective for an equivilent value stored in state.
 	"""
 	annotations: [Annotation]!
+	annotation(name: String!): Annotation
 
     """
     nodes have a "kind" label, it is the human friendly decoding of the first 4
