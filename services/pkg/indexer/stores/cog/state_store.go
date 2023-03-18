@@ -2,6 +2,7 @@ package cog
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"sync"
 	"time"
@@ -58,8 +59,11 @@ func NewStateStore(ctx context.Context, client *alchemy.Client, watcher *eventwa
 	return store, nil
 }
 
-func (rs *StateStore) emitState(stateAddr common.Address) {
-	rs.notifications <- &model.State{ID: stateAddr.Hex()}
+func (rs *StateStore) emitStateEvent(stateAddr common.Address, stateEvent model.Event) {
+	rs.notifications <- &model.StateEvent{
+		Event:   stateEvent,
+		StateID: stateAddr.Hex(),
+	}
 }
 
 func (rs *StateStore) watch(ctx context.Context, events chan types.Log) {
@@ -160,7 +164,6 @@ func (rs *StateStore) setEdgeType(evt *state.StateEdgeTypeRegister) error {
 	g = g.SetRelData(evt)
 	// commit
 	rs.graphs[evt.Raw.Address] = g
-	rs.emitState(evt.Raw.Address)
 	return nil
 }
 
@@ -172,7 +175,6 @@ func (rs *StateStore) setNodeType(evt *state.StateNodeTypeRegister) error {
 	g = g.SetKindData(evt)
 	// commit
 	rs.graphs[evt.Raw.Address] = g
-	rs.emitState(evt.Raw.Address)
 	return nil
 }
 
@@ -204,7 +206,11 @@ func (rs *StateStore) setAnnotation(evt *state.StateAnnotationSet) error {
 
 	// commit the graph
 	rs.graphs[evt.Raw.Address] = g
-	rs.emitState(evt.Raw.Address)
+	rs.emitStateEvent(evt.Raw.Address, &model.SetAnnotationEvent{
+		ID:   fmt.Sprintf("%d-%d", evt.Raw.BlockNumber, evt.Raw.Index),
+		From: nodeID,
+		Name: evt.Label,
+	})
 
 	return nil
 }
@@ -241,7 +247,13 @@ func (rs *StateStore) setEdge(evt *state.StateEdgeSet) error {
 
 	// commit the graph
 	rs.graphs[evt.Raw.Address] = g
-	rs.emitState(evt.Raw.Address)
+	rs.emitStateEvent(evt.Raw.Address, &model.SetEdgeEvent{
+		ID:   fmt.Sprintf("%d-%d", evt.Raw.BlockNumber, evt.Raw.Index),
+		From: srcNodeID,
+		To:   dstNodeID,
+		Rel:  relID,
+		Key:  int(relKey),
+	})
 
 	return nil
 }
@@ -274,7 +286,12 @@ func (rs *StateStore) removeEdge(evt *state.StateEdgeRemove) error {
 
 	// commit the graph
 	rs.graphs[evt.Raw.Address] = g
-	rs.emitState(evt.Raw.Address)
+	rs.emitStateEvent(evt.Raw.Address, &model.RemoveEdgeEvent{
+		ID:   fmt.Sprintf("%d-%d", evt.Raw.BlockNumber, evt.Raw.Index),
+		From: srcNodeID,
+		Rel:  relID,
+		Key:  int(relKey),
+	})
 
 	return nil
 }

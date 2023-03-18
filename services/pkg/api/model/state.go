@@ -10,11 +10,6 @@ import (
 	"github.com/playmint/ds-node/pkg/contracts/state"
 )
 
-type EdgeData struct {
-	To     string
-	Weight *big.Int
-}
-
 type CompoundKeyKind uint8
 
 const (
@@ -37,7 +32,7 @@ type Graph struct {
 	// cache of which nodes we have seen edges between
 	nodes *immutable.Map[string, bool]
 	// nodeID => relID => relKey => EdgeData
-	edges *immutable.Map[string, *immutable.Map[string, *immutable.Map[uint8, *EdgeData]]]
+	edges *immutable.Map[string, *DirectedEdge]
 	// mapping of relID => friendly name
 	rels *immutable.Map[string, *state.StateEdgeTypeRegister]
 	// mapping of kindID => friendly name
@@ -53,7 +48,7 @@ type Graph struct {
 func NewGraph(block uint64) *Graph {
 	return &Graph{
 		nodes:  immutable.NewMap[string, bool](nil),
-		edges:  immutable.NewMap[string, *immutable.Map[string, *immutable.Map[uint8, *EdgeData]]](nil),
+		edges:  immutable.NewMap[string, *DirectedEdge](nil),
 		rels:   immutable.NewMap[string, *state.StateEdgeTypeRegister](nil),
 		kinds:  immutable.NewMap[string, *state.StateNodeTypeRegister](nil),
 		labels: immutable.NewMap[string, *immutable.Map[string, string]](nil),
@@ -119,19 +114,17 @@ func (g *Graph) SetAnnotationData(nodeID string, label string, ref string, data 
 }
 
 func (g *Graph) SetEdge(relID string, relKey uint8, srcNodeID string, dstNodeID string, weight *big.Int, block uint64) *Graph {
-	// update the edge data
-	edgesForNode, ok := g.edges.Get(srcNodeID)
-	if !ok {
-		edgesForNode = immutable.NewMap[string, *immutable.Map[uint8, *EdgeData]](nil)
+
+	e := &DirectedEdge{
+		from:   srcNodeID,
+		to:     dstNodeID,
+		weight: weight,
+		key:    relKey,
+		rel:    relID,
 	}
-	edgesOfKind, ok := edgesForNode.Get(relID)
-	if !ok || edgesOfKind == nil {
-		edgesOfKind = immutable.NewMap[uint8, *EdgeData](nil)
-	}
-	edgesOfKind = edgesOfKind.Set(relKey, &EdgeData{dstNodeID, weight})
-	edgesForNode = edgesForNode.Set(relID, edgesOfKind)
-	edges := g.edges
-	edges = edges.Set(srcNodeID, edgesForNode)
+
+	// set the edge going in both directions
+	edges := g.edges.Set(e.ID(), e)
 
 	// update the node data to mark the seen nodes
 	nodes := g.nodes
@@ -153,19 +146,14 @@ func (g *Graph) SetEdge(relID string, relKey uint8, srcNodeID string, dstNodeID 
 }
 
 func (g *Graph) RemoveEdge(relID string, relKey uint8, srcNodeID string, block uint64) *Graph {
-	// update the edge data
-	edgesForNode, ok := g.edges.Get(srcNodeID)
-	if !ok {
-		edgesForNode = immutable.NewMap[string, *immutable.Map[uint8, *EdgeData]](nil)
+
+	// remove edge
+	e := &DirectedEdge{
+		from: srcNodeID,
+		rel:  relID,
+		key:  relKey,
 	}
-	edgesOfKind, ok := edgesForNode.Get(relID)
-	if !ok || edgesOfKind == nil {
-		edgesOfKind = immutable.NewMap[uint8, *EdgeData](nil)
-	}
-	edgesOfKind = edgesOfKind.Delete(relKey)
-	edgesForNode = edgesForNode.Set(relID, edgesOfKind)
-	edges := g.edges
-	edges = edges.Set(srcNodeID, edgesForNode)
+	edges := g.edges.Delete(e.ID())
 
 	// TODO: should we remove nodes from the node list that have no edges connected?
 
@@ -245,10 +233,8 @@ func (g *Graph) GetNodes(match *Match) []*Node {
 			continue
 		}
 		node := g.get(id)
-		if match != nil && len(match.Kinds) > 0 {
-			if !contains(match.Kinds, node.Kind()) {
-				continue
-			}
+		if match != nil && !match.MatchNode(node) {
+			continue
 		}
 		nodes = append(nodes, node)
 	}
@@ -333,7 +319,8 @@ func (n *Node) Annotations() []*Annotation {
 			continue
 		}
 		annotations = append(annotations, &Annotation{
-			ID:    annotationRef,
+			ID:    fmt.Sprintf("%s-%s", n.ID, label),
+			Ref:   annotationRef,
 			Name:  label,
 			Value: data,
 		})
@@ -406,11 +393,7 @@ func (n *Node) Node(match *Match) (*Node, error) {
 func (n *Node) Nodes(match *Match) ([]*Node, error) {
 	seen := map[string]bool{}
 	nodes := []*Node{}
-	edges, err := n.matchEdges(match)
-	if err != nil {
-		return nil, err
-	}
-	for _, edge := range edges {
+	for _, edge := range n.matchEdges(match, 0, map[string]bool{}) {
 		node := edge.Node()
 		if seen[node.ID] {
 			continue
@@ -427,209 +410,190 @@ func (n *Node) Edge(match *Match) (*Edge, error) {
 	}
 	limit := 1
 	match.Limit = &limit
-	edges, err := n.matchEdges(match)
-	if err != nil {
-		return nil, err
-	}
+	edges := n.matchEdges(match, 0, map[string]bool{})
 	if len(edges) == 0 {
 		return nil, nil
 	}
 	return edges[0], nil
 }
 
-func (n *Node) matchEdges(match *Match) ([]*Edge, error) {
-	if match == nil {
-		match = &Match{}
-	}
-	edges := []*Edge{}
-	// convert kind names to kind ids
-	kindIDs := []string{}
-	for _, kind := range match.Kinds {
-		kindID := n.g.GetKindByName(kind)
-		if kindID == "" {
-			return nil, fmt.Errorf("no kind found with name %s", kind)
-		}
-		kindIDs = append(kindIDs, kindID)
-	}
-	// create a matcher for the nodes
-	matchNode := func(nodeID string) bool {
-		if len(match.Ids) > 0 && !contains(match.Ids, nodeID) {
-			return false
-		}
-		b, _ := hexutil.Decode(nodeID)
-		nodeKind := hexutil.Encode(b[:4])
-		for len(kindIDs) > 0 && !contains(kindIDs, nodeKind) {
-			return false
-		}
-		return true
-	}
-	// create a visitor
-	seen := map[*EdgeData]bool{}
-	visit := func(edge *Edge) bool {
-		if !matchNode(edge.nodeID) {
-			return false // don't stop
-		}
-		edges = append(edges, edge)
-		if match.Limit != nil && len(edges) == *match.Limit {
-			return true // stop
-		}
-		return false // don't stop
-	}
-	err := n.walk(match, visit, seen)
-	if err != nil {
-		return nil, err
-	}
-	return edges, nil
-}
-
-func (n *Node) walk(match *Match, visit func(*Edge) bool, visited map[*EdgeData]bool) error {
-	// walk along all the edges specified by Via
-	for _, via := range match.Via {
-		dir := RelMatchDirectionOut
-		if via.Dir != nil {
-			dir = *via.Dir
-		}
-		relID := n.g.GetRelByName(via.Rel)
-		if relID == "" {
-			return fmt.Errorf("no rel found with name %s", via.Rel)
-		}
-
-		if dir == RelMatchDirectionOut || dir == RelMatchDirectionBoth {
-			// find outbound edges from this node
-			out, edgesExist := n.g.edges.Get(n.ID)
-			if edgesExist {
-				outEdgesItr := out.Iterator()
-				for !outEdgesItr.Done() {
-					outRelID, outEdgesOfRel, outEdgesOfRelExist := outEdgesItr.Next()
-					if !outEdgesOfRelExist {
-						continue
-					}
-					if outRelID != relID {
-						continue
-					}
-					outEdgesOfRelItr := outEdgesOfRel.Iterator()
-					for !outEdgesOfRelItr.Done() {
-						outRelKey, outEdgeData, outEdgeDataExists := outEdgesOfRelItr.Next()
-						if !outEdgeDataExists {
-							continue
-						}
-						// if via.Key != outRelKey {
-						// 	continue
-						// }
-						if visited[outEdgeData] {
-							continue
-						}
-						visited[outEdgeData] = true
-						edge := &Edge{
-							g:      n.g,
-							nodeID: outEdgeData.To,
-							weight: outEdgeData.Weight,
-							key:    outRelKey,
-							Dir:    RelMatchDirectionOut,
-							RelID:  relID,
-						}
-						if stop := visit(edge); stop {
-							return nil
-						}
-						if err := edge.Node().walk(match, visit, visited); err != nil {
-							return err
-						}
-					}
-
-				}
-			}
-
-		}
-		if dir == RelMatchDirectionIn || dir == RelMatchDirectionBoth {
-			// find inbound edges to this node
-			allEdges := n.g.edges.Iterator()
-			for !allEdges.Done() {
-				srcNodeID, srcNodeEdges, exists := allEdges.Next()
-				if !exists {
-					continue
-				}
-				srcNodeEdgeItr := srcNodeEdges.Iterator()
-				for !srcNodeEdgeItr.Done() {
-					inRelID, inEdgesOfRel, exists := srcNodeEdgeItr.Next()
-					if !exists {
-						continue
-					}
-					if inRelID != relID {
-						continue
-					}
-					inEdgesOfRelItr := inEdgesOfRel.Iterator()
-					for !inEdgesOfRelItr.Done() {
-						inRelKey, inEdgeData, exists := inEdgesOfRelItr.Next()
-						if !exists {
-							continue
-						}
-						if inEdgeData.To != n.ID {
-							continue
-						}
-						if visited[inEdgeData] {
-							continue
-						}
-						visited[inEdgeData] = true
-						edge := &Edge{
-							g:      n.g,
-							nodeID: srcNodeID,
-							weight: inEdgeData.Weight,
-							key:    inRelKey,
-							Dir:    RelMatchDirectionIn,
-							RelID:  relID,
-						}
-						if stop := visit(edge); stop {
-							return nil
-						}
-						if err := edge.Node().walk(match, visit, visited); err != nil {
-							return err
-						}
-					}
-				}
-			}
-		}
-	}
-	return nil
-}
-
 func (n *Node) Edges(match *Match) ([]*Edge, error) {
-	return n.matchEdges(match)
+	return n.matchEdges(match, 0, map[string]bool{}), nil
+}
+
+func (n *Node) getDirectEdges(match *Match) []*Edge {
+	result := []*Edge{}
+
+	edgesItr := n.g.edges.Iterator()
+	for !edgesItr.Done() {
+		_, directedEdge, exists := edgesItr.Next()
+		if !exists {
+			continue
+		}
+		edge := &Edge{
+			g:            n.g,
+			DirectedEdge: directedEdge,
+		}
+		if edge.from == n.ID {
+			// match normal
+			edge.Dir = RelMatchDirectionOut
+		} else if edge.to == n.ID {
+			// match reverse
+			edge.Dir = RelMatchDirectionIn
+		} else {
+			// no direct match
+			continue
+		}
+		if !match.MatchEdge(edge) {
+			continue
+		}
+		result = append(result, edge)
+	}
+	return result
+}
+
+func (n *Node) matchEdges(match *Match, depth int, seen map[string]bool) []*Edge {
+	// add ourself to the seen list
+	seen[n.ID] = true
+	// get all the connections from this node
+	edges := n.getDirectEdges(match)
+	// for each edge collect the edges of their node
+	// do this until we hit match.MaxDepth
+	if match != nil && match.MaxDepth != nil && depth < *(match.MaxDepth) {
+		for _, e := range edges {
+			next := e.Node()
+			if seen[next.ID] {
+				continue
+			}
+			seen[next.ID] = true
+			for _, moreEdges := range next.matchEdges(match, depth+1, seen) {
+				edges = append(edges, moreEdges)
+			}
+		}
+	}
+
+	// return what we got
+	return edges
 }
 
 type Edge struct {
-	g      *Graph
-	nodeID string
+	g   *Graph
+	Dir RelMatchDirection
+	*DirectedEdge
+}
+
+func (e *Edge) Node() *Node {
+	if e.Dir == RelMatchDirectionOut {
+		return e.g.get(e.to)
+	} else {
+		return e.g.get(e.from)
+	}
+}
+
+type DirectedEdge struct {
+	from   string
+	to     string
 	key    uint8
 	weight *big.Int
-	Dir    RelMatchDirection `json:"dir"`
-	RelID  string            `json:"relID"`
+	rel    string
 }
 
 func (e *Edge) Rel() string {
-	relData, ok := e.g.rels.Get(e.RelID)
+	relData, ok := e.g.rels.Get(e.rel)
 	if !ok {
-		return e.RelID
+		return e.rel
 	}
 	return relData.Name
 }
 
-func (e *Edge) Node() *Node {
-	return e.g.get(e.nodeID)
+func (e *Edge) Src() *Node {
+	return e.g.get(e.from)
 }
 
-func (e *Edge) Key() int {
+func (e *Edge) Dst() *Node {
+	return e.g.get(e.to)
+}
+
+func (e *DirectedEdge) ID() string {
+	return fmt.Sprintf("%s-%s-%d", e.from, e.rel, e.key)
+}
+
+func (e *DirectedEdge) Key() int {
 	return int(e.key)
 }
 
-func (e *Edge) Weight() int {
+func (e *DirectedEdge) Weight() int {
 	if e.weight == nil {
 		return 0
 	}
 	return int(e.weight.Uint64())
 }
 
+func (match *Match) MatchNode(n *Node) bool {
+	if match == nil {
+		return true
+	}
+	if len(match.Ids) > 0 && !contains(match.Ids, n.ID) {
+		return false
+	}
+	if len(match.Kinds) > 0 && !contains(match.Kinds, n.Kind()) {
+		return false
+	}
+	return true
+}
+
+func (match *Match) MatchEdge(e *Edge) bool {
+	if ok := match.MatchVia(e); !ok {
+		return false
+	}
+	if ok := match.MatchNode(e.Node()); !ok {
+		return false
+	}
+	return true
+}
+
+func (match *Match) MatchVia(e *Edge) bool {
+	if match == nil {
+		return true
+	}
+	if !match.viaRels(e) {
+		return false
+	}
+	return true
+}
+
+func (match *Match) viaRels(e *Edge) bool {
+	if match.Via == nil {
+		return true
+	}
+	numRels := 0
+	for _, via := range match.Via {
+		if via.Rel != "" {
+			matchRelID := e.g.GetRelByName(via.Rel)
+			if matchRelID == "" {
+				continue // invalid
+			}
+			dir := RelMatchDirectionOut
+			if via.Dir != nil {
+				dir = *(via.Dir)
+			}
+			numRels++
+			if matchRelID == e.rel &&
+				(via.Key == nil || *(via.Key) == e.Key()) &&
+				(dir == RelMatchDirectionBoth || dir == e.Dir) {
+				return true
+			}
+		}
+	}
+	if numRels == 0 {
+		return true
+	}
+	return false
+}
+
 func contains(s []string, e string) bool {
 	for _, a := range s {
+		fmt.Println("a vs e", a, e)
 		if strings.EqualFold(a, e) {
 			return true
 		}

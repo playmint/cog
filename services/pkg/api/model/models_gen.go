@@ -8,6 +8,10 @@ import (
 	"strconv"
 )
 
+type Event interface {
+	IsEvent()
+}
+
 type Account struct {
 	ID string `json:"id"`
 }
@@ -21,6 +25,7 @@ type Account struct {
 // usually cost-effective for an equivilent value stored in state.
 type Annotation struct {
 	ID    string `json:"id"`
+	Ref   string `json:"ref"`
 	Name  string `json:"name"`
 	Value string `json:"value"`
 }
@@ -72,6 +77,9 @@ type Match struct {
 	Has []*RelMatch `json:"has"`
 	// `limit` stops matches after that many edges have been collected
 	Limit *int `json:"limit"`
+	// how many connections of connections allow to follow when searching
+	// for a match. default=0 (meaning only direct connections)
+	MaxDepth *int `json:"maxDepth"`
 }
 
 // RelMatch configures the types of edges that can be matched.
@@ -83,7 +91,17 @@ type Match struct {
 type RelMatch struct {
 	Rel string             `json:"rel"`
 	Dir *RelMatchDirection `json:"dir"`
+	Key *int               `json:"key"`
 }
+
+type RemoveEdgeEvent struct {
+	ID   string `json:"id"`
+	From string `json:"from"`
+	Rel  string `json:"rel"`
+	Key  int    `json:"key"`
+}
+
+func (RemoveEdgeEvent) IsEvent() {}
 
 type Router struct {
 	ID           string               `json:"id"`
@@ -96,6 +114,24 @@ type Router struct {
 type SessionScope struct {
 	FullAccess bool `json:"FullAccess"`
 }
+
+type SetAnnotationEvent struct {
+	ID   string `json:"id"`
+	From string `json:"from"`
+	Name string `json:"name"`
+}
+
+func (SetAnnotationEvent) IsEvent() {}
+
+type SetEdgeEvent struct {
+	ID   string `json:"id"`
+	From string `json:"from"`
+	To   string `json:"to"`
+	Rel  string `json:"rel"`
+	Key  int    `json:"key"`
+}
+
+func (SetEdgeEvent) IsEvent() {}
 
 type State struct {
 	ID    string `json:"id"`
