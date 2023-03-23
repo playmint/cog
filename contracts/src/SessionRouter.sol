@@ -34,7 +34,12 @@ contract SessionRouter is Router {
 
     mapping(address => Session) public sessions;
 
-    function getAuthMessage(uint32 ttl, uint32, /*scopes*/ address sessionAddr) internal virtual pure returns (bytes memory) {
+    function getAuthMessage(uint32 ttl, uint32, /*scopes*/ address sessionAddr)
+        internal
+        pure
+        virtual
+        returns (bytes memory)
+    {
         return abi.encodePacked(
             "Welcome!",
             "\n\nThis site is requesting permission to create a temporary session key.",
