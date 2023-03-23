@@ -1,7 +1,32 @@
 
+interface Event {
+	id: ID!
+}
+
+type SetEdgeEvent implements Event {
+	id: ID!
+	from: String!
+	to: String!
+	rel: String!
+	key: Int!
+}
+
+type RemoveEdgeEvent implements Event {
+	id: ID!
+	from: String!
+	rel: String!
+	key: Int!
+}
+
+type SetAnnotationEvent implements Event {
+	id: ID!
+	from: String!
+	name: String!
+}
+
 
 type Subscription {
-	state(gameID: ID!): State
+	events(gameID: ID!): Event!
 	transaction(gameID: ID!, owner: String): ActionTransaction!
 	session(gameID: ID!, owner: String): Session!
 }

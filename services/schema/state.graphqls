@@ -35,6 +35,12 @@ input Match {
 	`limit` stops matches after that many edges have been collected
 	"""
 	limit: Int
+
+	"""
+	how many connections of connections allow to follow when searching
+	for a match. default=0 (meaning only direct connections)
+	"""
+	maxDepth: Int
 }
 
 """
@@ -61,6 +67,7 @@ outbound or inbound direction from this node.
 input RelMatch {
 	rel: String!
 	dir: RelMatchDirection
+	key: Int
 }
 
 type State {
@@ -168,9 +175,32 @@ with the edge that we followed.
 """
 type Edge {
   """
+  edge ids are "virtual" ids that only exist so you can fetch a particular edge
+  in isolation. they are a compound key of DIR+REL+KEY+NODE.ID+PARENT.ID this
+  means that for every "real" edge there are two "virtual" edges with different
+  graphql IDs (one pointing one way, one pointing the other).  this allows for
+  invalidating caches and fetching partial results for edge queries.
+  """
+  id: ID!
+
+  """
   the node on the `dir` end of this edge.
   """
   node: Node!
+
+  """
+  the true source end of the edge (unlike `node` which is based on current Dir)
+  you probably want `node` not this, but sometimes it's useful when dealing
+  with lists of edges
+  """
+  src: Node!
+
+  """
+  the true dest end of the edge (unlike `node` which is based on the current
+  Dir) you probably want `node` not this, but sometimes it's useful when
+  dealing with lists of edges
+  """
+  dst: Node!
 
   """
   `weight` is the value stored in the edge
@@ -247,6 +277,7 @@ usually cost-effective for an equivilent value stored in state.
 """
 type Annotation {
 	id: ID!
+	ref: String!
 	name: String!
 	value: String!
 }
