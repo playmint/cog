@@ -593,7 +593,6 @@ func (match *Match) viaRels(e *Edge) bool {
 
 func contains(s []string, e string) bool {
 	for _, a := range s {
-		fmt.Println("a vs e", a, e)
 		if strings.EqualFold(a, e) {
 			return true
 		}
