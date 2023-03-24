@@ -1,5 +1,6 @@
 SHELL := /bin/bash
 CWD := $(shell cd -P -- '$(shell dirname -- "$0")' && pwd -P)
+SRC := $(wildcard **/*.go)
 
 COG_CONTRACTS_DIR=../contracts
 COG_CONTRACTS_SOL=$(wildcard $(COG_CONTRACTS_DIR)/src/*.sol)
@@ -10,7 +11,7 @@ COG_EXAMPLES_CONTRACTS_DIR=../examples
 .PHONY: all
 all: bin/ds-node bin/wait-for
 
-bin/ds-node: pkg/contracts/state/State.go pkg/contracts/router/SessionRouter.go pkg/contracts/game/BaseGame.go pkg/api/resolvers/resolver.go
+bin/ds-node: pkg/contracts/state/State.go pkg/contracts/router/SessionRouter.go pkg/contracts/game/BaseGame.go pkg/api/resolvers/resolver.go $(SRC)
 	mkdir -p bin
 	go build -o $@ ./cmd/ds-node
 
