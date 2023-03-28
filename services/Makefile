@@ -1,6 +1,6 @@
 SHELL := /bin/bash
 CWD := $(shell cd -P -- '$(shell dirname -- "$0")' && pwd -P)
-SRC := $(wildcard **/*.go)
+SRC := $(shell find . -name '*.go'
 
 COG_CONTRACTS_DIR=../contracts
 COG_CONTRACTS_SOL=$(wildcard $(COG_CONTRACTS_DIR)/src/*.sol)
