@@ -10,6 +10,6 @@ var SequencerProviderHTTP = getRequiredEnvString("SEQUENCER_PROVIDER_URL_HTTP")
 var SequencerProviderWS = getRequiredEnvString("SEQUENCER_PROVIDER_URL_WS")
 var SequencerPrivateKey = getRequiredEnvKey("SEQUENCER_PRIVATE_KEY")
 var SequencerMaxConcurrency = getOptionalEnvInt("SEQUENCER_MAX_CONCURRENCY", 200)
-var SequencerMinBatchDelaySeconds = getOptionalEnvInt("SEQUENCER_MIN_BATCH_DELAY_SECONDS", 1)
+var SequencerMinBatchDelayMilliseconds = getOptionalEnvInt("SEQUENCER_MIN_BATCH_DELAY_MS", 100)
 
 var APIPort = getOptionalEnvInt("API_PORT", 8080)
