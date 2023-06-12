@@ -5,7 +5,6 @@ import (
 	"crypto/ecdsa"
 	"fmt"
 	"math/big"
-	"strings"
 	"sync"
 	"time"
 
@@ -66,7 +65,7 @@ type MemorySequencer struct {
 	sync.RWMutex
 }
 
-func NewMemorySequencer(ctx context.Context, key *ecdsa.PrivateKey, notifications chan interface{}) (*MemorySequencer, error) {
+func NewMemorySequencer(ctx context.Context, key *ecdsa.PrivateKey, notifications chan interface{}, httpProviderURL string, simProviderURL string) (*MemorySequencer, error) {
 	var err error
 	seqr := &MemorySequencer{
 		PrivateKey:    key,
@@ -75,7 +74,7 @@ func NewMemorySequencer(ctx context.Context, key *ecdsa.PrivateKey, notification
 	}
 	// setup an RPC client
 	seqr.httpClient, err = alchemy.Dial(
-		config.SequencerProviderHTTP,
+		httpProviderURL,
 		config.SequencerMaxConcurrency,
 		config.SequencerPrivateKey,
 	)
@@ -240,16 +239,54 @@ func (seqr *MemorySequencer) commitBatch(
 	dryRun bool,
 ) (*types.Receipt, error) {
 
+	seqr.httpClient.Lock()
+	defer seqr.httpClient.Unlock()
+
+	if dryRun {
+		// new simulation client
+		sim, err := alchemy.Dial(
+			config.SimulationProviderHTTP,
+			config.SequencerMaxConcurrency,
+			config.SequencerPrivateKey,
+		)
+		if err != nil {
+			return nil, err
+		}
+		// get current block
+		latest, err := seqr.httpClient.BlockNumber(ctx)
+		if err != nil {
+			return nil, err
+		}
+		// fork
+		_, err = sim.Reset(ctx, config.SequencerProviderHTTP, latest)
+		if err != nil {
+			return nil, err
+		}
+		// apply
+		return seqr.commitBatchWithClient(ctx, routerAddr, batch, sim)
+	} else {
+		return seqr.commitBatchWithClient(ctx, routerAddr, batch, seqr.httpClient)
+	}
+
+	// batch.Inc() // TODO: metrics
+	// cost, _ := weiToGwei(tx.Cost()).Float64()
+	// txCost.Observe(cost)
+
+}
+
+func (seqr *MemorySequencer) commitBatchWithClient(
+	ctx context.Context,
+	routerAddr common.Address,
+	batch *model.ActionBatch,
+	client *alchemy.Client,
+) (*types.Receipt, error) {
+	// prep action data
 	actions := [][][]byte{}
 	sigs := [][]byte{}
 	for _, action := range batch.Transactions {
 		actions = append(actions, action.ActionBytes())
 		sigs = append(sigs, action.ActionSig())
 	}
-
-	client := seqr.httpClient
-	client.Lock()
-	defer client.Unlock()
 
 	sessionRouter, err := router.NewSessionRouter(routerAddr, client)
 	if err != nil {
@@ -265,50 +302,27 @@ func (seqr *MemorySequencer) commitBatch(
 	txOpts.Value = big.NewInt(0) // in wei
 	// txOpts.GasLimit = uint64(3000000000)                                  // in units
 	// txOpts.GasPrice = txOpts.GasPrice.Mul(txOpts.GasPrice, big.NewInt(2)) // up to double
-
-	var tx *types.Transaction
-	if dryRun {
-		cabi, err := abi.JSON(strings.NewReader(router.SessionRouterABI))
-		if err != nil {
-			return nil, err
-		}
-		input, err := cabi.Pack("dispatch", actions, sigs)
-		if err != nil {
-			return nil, err
-		}
-		err = client.EstimateContractGas(ctx, txOpts, &routerAddr, input)
-		if err != nil {
-			return nil, fmt.Errorf("failed dry-run of batch tx: %v", err)
-		}
-		return nil, err
-	} else {
-		tx, err = sessionRouter.Dispatch(txOpts,
-			actions,
-			sigs,
-		)
-		if err != nil {
-			return nil, fmt.Errorf("failed commit batch tx: %v", err)
-		}
-		defer client.IncrementRelayNonce(ctx)
-		// wait til batch success
-		maxWait, cancel := context.WithTimeout(ctx, 1*time.Minute)
-		defer cancel()
-		rcpt, err := bind.WaitMined(maxWait, client, tx)
-		if err != nil {
-			return nil, err
-		}
-		switch rcpt.Status {
-		case 1:
-		default:
-			return nil, fmt.Errorf("tx failed: %v", rcpt)
-		}
-		return rcpt, nil
+	tx, err := sessionRouter.Dispatch(txOpts,
+		actions,
+		sigs,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed commit batch tx: %v", err)
 	}
-
-	// batch.Inc() // TODO: metrics
-	// cost, _ := weiToGwei(tx.Cost()).Float64()
-	// txCost.Observe(cost)
-
+	defer client.IncrementRelayNonce(ctx)
+	// wait til batch success
+	maxWait, cancel := context.WithTimeout(ctx, 1*time.Minute)
+	defer cancel()
+	rcpt, err := bind.WaitMined(maxWait, client, tx)
+	if err != nil {
+		return nil, err
+	}
+	switch rcpt.Status {
+	case 1:
+	default:
+		return nil, fmt.Errorf("tx failed: %v", rcpt)
+	}
+	return rcpt, nil
 }
 
 func (seqr *MemorySequencer) Signout(ctx context.Context, routerAddr common.Address, sessionKey common.Address, permit string) error {

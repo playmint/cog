@@ -39,13 +39,13 @@ func Main(ctx context.Context) error {
 	go subscriptions.Listen(ctx)
 
 	// start an indexer
-	idxr, err := indexer.NewMemoryIndexer(ctx, notifications)
+	idxr, err := indexer.NewMemoryIndexer(ctx, notifications, config.IndexerProviderHTTP, config.IndexerProviderWS)
 	if err != nil {
 		return err
 	}
 
 	// start a sequencer
-	seqr, err := sequencer.NewMemorySequencer(ctx, config.SequencerPrivateKey, notifications)
+	seqr, err := sequencer.NewMemorySequencer(ctx, config.SequencerPrivateKey, notifications, config.SequencerProviderHTTP, config.SimulationProviderHTTP)
 	if err != nil {
 		return err
 	}

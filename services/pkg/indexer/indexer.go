@@ -37,7 +37,7 @@ type MemoryIndexer struct {
 	wsClient      *alchemy.Client
 }
 
-func NewMemoryIndexer(ctx context.Context, notifications chan interface{}) (*MemoryIndexer, error) {
+func NewMemoryIndexer(ctx context.Context, notifications chan interface{}, httpProviderURL string, wsProviderURL string) (*MemoryIndexer, error) {
 	var err error
 
 	idxr := &MemoryIndexer{}
@@ -45,7 +45,7 @@ func NewMemoryIndexer(ctx context.Context, notifications chan interface{}) (*Mem
 	idxr.notifications = notifications
 
 	idxr.httpClient, err = alchemy.Dial(
-		config.IndexerProviderHTTP,
+		httpProviderURL,
 		config.IndexerMaxConcurrency,
 		nil,
 	)
@@ -54,7 +54,7 @@ func NewMemoryIndexer(ctx context.Context, notifications chan interface{}) (*Mem
 	}
 
 	idxr.wsClient, err = alchemy.Dial(
-		config.IndexerProviderWS,
+		wsProviderURL,
 		config.IndexerMaxConcurrency,
 		nil,
 	)

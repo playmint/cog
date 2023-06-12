@@ -10,6 +10,7 @@ import (
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -119,6 +120,23 @@ func (c *Client) NewRelayTransactor(ctx context.Context) (*bind.TransactOpts, er
 	// txOpts.GasPrice = gasPrice
 
 	return txOpts, nil
+}
+
+// [{"forking": {"jsonRpcUrl": "httKBrdf", "blockNumber": 14000000}}
+func (c *Client) Reset(ctx context.Context, remoteURL string, remoteBlockNumber uint64) (uint64, error) {
+	forking := map[string]interface{}{
+		"jsonRpcUrl":  remoteURL,
+		"blockNumber": remoteBlockNumber,
+	}
+	params := map[string]interface{}{
+		"forking": forking,
+	}
+	var hex hexutil.Uint64
+	err := c.rpc.CallContext(ctx, &hex, "anvil_reset", params)
+	if err != nil {
+		return 0, err
+	}
+	return uint64(hex), nil
 }
 
 func (c *Client) EstimateContractGas(ctx context.Context, opts *bind.TransactOpts, contract *common.Address, input []byte) error {
