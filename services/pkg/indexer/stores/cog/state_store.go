@@ -13,7 +13,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/playmint/ds-node/pkg/api/model"
 	"github.com/playmint/ds-node/pkg/client"
-	"github.com/playmint/ds-node/pkg/client/alchemy"
 	"github.com/playmint/ds-node/pkg/contracts/state"
 	"github.com/playmint/ds-node/pkg/indexer/eventwatcher"
 	"github.com/rs/zerolog"
@@ -23,40 +22,38 @@ import (
 type StateStore struct {
 	graphs        map[common.Address]*model.Graph
 	abi           *abi.ABI
-	client        *alchemy.Client
 	notifications chan interface{}
 	log           zerolog.Logger
+	name          string
 	sync.RWMutex
 }
 
-func NewStateStore(ctx context.Context, client *alchemy.Client, watcher *eventwatcher.Watcher, notifications chan interface{}) (*StateStore, error) {
+func NewStateStore(ctx context.Context, watcher *eventwatcher.Watcher, notifications chan interface{}) (*StateStore, error) {
 	cabi, err := abi.JSON(strings.NewReader(state.StateABI))
 	if err != nil {
-		return nil, err
+		panic(err)
 	}
 	store := &StateStore{
 		graphs:        map[common.Address]*model.Graph{},
-		client:        client,
 		abi:           &cabi,
 		notifications: notifications,
+		name:          "og",
 		log:           log.With().Str("service", "indexer").Str("component", "statestore").Logger(),
 	}
-	// watch all events from all contracts that match the GameDeployed topic
-	query := [][]interface{}{{
-		cabi.Events["EdgeRemove"].ID,
-		cabi.Events["EdgeSet"].ID,
-		cabi.Events["NodeTypeRegister"].ID,
-		cabi.Events["EdgeTypeRegister"].ID,
-		cabi.Events["AnnotationSet"].ID,
-	}}
-	topics, err := abi.MakeTopics(query...)
-	if err != nil {
-		return nil, err
-	}
-	queue := watcher.SubscribeTopic(topics[0])
-
-	go store.watch(ctx, queue)
+	store.watch(ctx, watcher)
 	return store, nil
+}
+
+func (rs *StateStore) Fork(ctx context.Context, watcher *eventwatcher.Watcher) *StateStore {
+	newStore := &StateStore{
+		graphs:        rs.graphs,
+		abi:           rs.abi,
+		notifications: rs.notifications,
+		log:           rs.log,
+		name:          "forked",
+	}
+	newStore.watch(ctx, watcher)
+	return newStore
 }
 
 func (rs *StateStore) emitStateEvent(stateAddr common.Address, stateEvent model.Event) {
@@ -66,12 +63,30 @@ func (rs *StateStore) emitStateEvent(stateAddr common.Address, stateEvent model.
 	}
 }
 
-func (rs *StateStore) watch(ctx context.Context, events chan types.Log) {
+func (rs *StateStore) watch(ctx context.Context, watcher *eventwatcher.Watcher) {
+	// watch all events from all contracts that match the GameDeployed topic
+	query := [][]interface{}{{
+		rs.abi.Events["EdgeRemove"].ID,
+		rs.abi.Events["EdgeSet"].ID,
+		rs.abi.Events["NodeTypeRegister"].ID,
+		rs.abi.Events["EdgeTypeRegister"].ID,
+		rs.abi.Events["AnnotationSet"].ID,
+	}}
+	topics, err := abi.MakeTopics(query...)
+	if err != nil {
+		panic(err)
+	}
+	events := watcher.SubscribeTopic(topics[0])
+	go rs.watchLoop(ctx, events)
+}
+
+func (rs *StateStore) watchLoop(ctx context.Context, events chan types.Log) {
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case rawEvent := <-events:
+			rs.log.Info().Str("indexer", rs.name).Msgf("got event %v", rawEvent)
 			eventABI, err := rs.abi.EventByID(rawEvent.Topics[0])
 			if err != nil {
 				rs.log.Warn().Err(err).Msg("unhandleable event topic")

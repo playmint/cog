@@ -60,6 +60,10 @@ func NewGameStore(ctx context.Context, client *alchemy.Client, watcher *eventwat
 	return store, nil
 }
 
+func (rs *GameStore) Fork(ctx context.Context, watcher *eventwatcher.Watcher, client *alchemy.Client) *GameStore {
+	return rs
+}
+
 func (rs *GameStore) emitGame(game *model.Game) {
 	rs.notifications <- game
 }

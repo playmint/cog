@@ -5,9 +5,11 @@ import (
 	"crypto/ecdsa"
 	"fmt"
 	"math/big"
+	"strings"
 	"sync"
 	"time"
 
+	ethereum "github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
@@ -18,6 +20,7 @@ import (
 	"github.com/playmint/ds-node/pkg/client/alchemy"
 	"github.com/playmint/ds-node/pkg/config"
 	"github.com/playmint/ds-node/pkg/contracts/router"
+	"github.com/playmint/ds-node/pkg/indexer"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	uuid "github.com/satori/go.uuid"
@@ -60,17 +63,22 @@ type MemorySequencer struct {
 	success       map[string][]*model.ActionBatch
 	failure       map[string][]*model.ActionBatch
 	httpClient    *alchemy.Client
+	simHttpClient *alchemy.Client
+	simWsClient   *alchemy.Client
+	simBlock      uint64
 	notifications chan interface{}
+	idxr          indexer.Indexer
 	log           zerolog.Logger
 	sync.RWMutex
 }
 
-func NewMemorySequencer(ctx context.Context, key *ecdsa.PrivateKey, notifications chan interface{}, httpProviderURL string, simProviderURL string) (*MemorySequencer, error) {
+func NewMemorySequencer(ctx context.Context, key *ecdsa.PrivateKey, notifications chan interface{}, httpProviderURL string, simProviderURL string, idxr indexer.Indexer) (*MemorySequencer, error) {
 	var err error
 	seqr := &MemorySequencer{
 		PrivateKey:    key,
 		notifications: notifications,
 		log:           log.With().Str("service", "sequencer").Logger(),
+		idxr:          idxr,
 	}
 	// setup an RPC client
 	seqr.httpClient, err = alchemy.Dial(
@@ -130,17 +138,25 @@ func (seqr *MemorySequencer) Enqueue(ctx context.Context,
 		return nil, fmt.Errorf("invalid action data")
 	}
 	seqr.Lock()
-	defer seqr.Unlock()
 
-	pendingBatch, ok := seqr.pending[routerAddr.Hex()]
+	processingBatch, ok := seqr.processing[routerAddr.Hex()]
 	if !ok {
-		pendingBatch = &model.ActionBatch{
+		processingBatch = &model.ActionBatch{
 			ID:            uuid.NewV4().String(),
 			Status:        model.ActionTransactionStatusPending,
 			RouterAddress: routerAddr.Hex(),
 		}
 	}
 
+	pendingBatch := &model.ActionBatch{
+		ID:            uuid.NewV4().String(),
+		Status:        model.ActionTransactionStatusPending,
+		RouterAddress: routerAddr.Hex(),
+	}
+	actualPending, ok := seqr.pending[routerAddr.Hex()]
+	if ok {
+		pendingBatch.Transactions = actualPending.Transactions
+	}
 	tx := &model.ActionTransaction{
 		ID:            uuid.NewV4().String(),
 		Owner:         ownerAddr.Hex(),
@@ -151,17 +167,48 @@ func (seqr *MemorySequencer) Enqueue(ctx context.Context,
 	}
 	pendingBatch.Transactions = append(pendingBatch.Transactions, tx)
 
-	// do a dry run of the pending batch to see if it explodes
-	// TODO: implement local chain simulation instead of this
-	// TOOD: the commitBatch logic should be exluding actions with expired session
-	dryRun := true
-	_, err := seqr.commitBatch(ctx, routerAddr, pendingBatch, dryRun)
-	if err != nil {
-		return nil, fmt.Errorf("action will cause batch to fail: %v", err)
+	simulatedBatches := []*model.ActionBatch{
+		processingBatch,
+		pendingBatch,
 	}
 
-	seqr.pending[routerAddr.Hex()] = pendingBatch
+	seqr.Unlock()
+
+	if seqr.simBlock > 0 {
+		seqr.log.Info().
+			Str("batch", pendingBatch.ID).
+			Msg("start-sim")
+		if err := seqr.resetSim(ctx, seqr.simBlock); err != nil {
+			return nil, err
+		}
+		for _, batch := range simulatedBatches {
+			_, err := seqr.commitBatchWithClient(ctx, routerAddr, batch, seqr.simHttpClient)
+			if err != nil {
+				seqr.log.Error().
+					Err(err).
+					Str("batch", pendingBatch.ID).
+					Msg("end-sim-fail")
+				return nil, err
+			}
+		}
+		seqr.log.Info().
+			Str("batch", pendingBatch.ID).
+			Msg("end-sim-ok")
+	}
+
+	seqr.Lock()
+	actualPending, ok = seqr.pending[routerAddr.Hex()]
+	if !ok {
+		actualPending = &model.ActionBatch{
+			ID:            uuid.NewV4().String(),
+			Status:        model.ActionTransactionStatusPending,
+			RouterAddress: routerAddr.Hex(),
+		}
+	}
+	actualPending.Transactions = append(actualPending.Transactions, tx)
+	seqr.pending[routerAddr.Hex()] = actualPending
 	seqr.emitTx(tx)
+	seqr.Unlock()
 
 	seqr.log.Info().
 		Str("batch", pendingBatch.ID).
@@ -172,23 +219,26 @@ func (seqr *MemorySequencer) Enqueue(ctx context.Context,
 }
 
 func (seqr *MemorySequencer) commit(ctx context.Context) {
-	// TODO: do this without locking the enqueue process so much
 	seqr.Lock()
-	defer seqr.Unlock()
-
 	seqr.processing = seqr.pending
 	seqr.pending = map[string]*model.ActionBatch{}
+	seqr.Unlock()
+
+	var latestBlock uint64
 
 	for routerAddr, batch := range seqr.processing {
 		if len(batch.Transactions) == 0 {
 			continue
 		}
-		rcpt, err := seqr.commitBatch(ctx, common.HexToAddress(routerAddr), batch, false)
+		rcpt, err := seqr.commitBatchWithClient(ctx, common.HexToAddress(routerAddr), batch, seqr.httpClient)
 		if rcpt != nil {
 			block := int(uint32(rcpt.BlockNumber.Uint64()))
 			batch.Block = &block
 			txid := rcpt.TxHash.Hex()
 			batch.Tx = &txid
+			if rcpt.BlockNumber.Uint64() > latestBlock {
+				latestBlock = rcpt.BlockNumber.Uint64()
+			}
 		}
 		if err != nil {
 			seqr.log.Error().
@@ -206,21 +256,18 @@ func (seqr *MemorySequencer) commit(ctx context.Context) {
 			}
 			failures = append(failures, batch)
 			seqr.failure[batch.RouterAddress] = failures
-			seqr.processing = map[string]*model.ActionBatch{}
-		} else {
-			seqr.log.Info().
-				Str("batch", batch.ID).
-				Msg("commit")
-			// move the batch into the success pile
-			batch.Status = model.ActionTransactionStatusSuccess
-			successes, ok := seqr.success[batch.RouterAddress]
-			if !ok {
-				successes = []*model.ActionBatch{}
-			}
-			successes = append(successes, batch)
-			seqr.success[batch.RouterAddress] = successes
-			seqr.processing = map[string]*model.ActionBatch{}
 		}
+		seqr.log.Info().
+			Str("batch", batch.ID).
+			Msg("commit")
+		// move the batch into the success pile
+		batch.Status = model.ActionTransactionStatusSuccess
+		successes, ok := seqr.success[batch.RouterAddress]
+		if !ok {
+			successes = []*model.ActionBatch{}
+		}
+		successes = append(successes, batch)
+		seqr.success[batch.RouterAddress] = successes
 		for _, tx := range batch.Transactions {
 			seqr.emitTx(tx)
 			seqr.log.Info().
@@ -230,48 +277,52 @@ func (seqr *MemorySequencer) commit(ctx context.Context) {
 				Msg("processed")
 		}
 	}
+	seqr.Lock()
+	if latestBlock > seqr.simBlock {
+		seqr.simBlock = latestBlock
+	}
+	seqr.processing = map[string]*model.ActionBatch{}
+	seqr.Unlock()
 }
 
-func (seqr *MemorySequencer) commitBatch(
-	ctx context.Context,
-	routerAddr common.Address,
-	batch *model.ActionBatch,
-	dryRun bool,
-) (*types.Receipt, error) {
-
-	seqr.httpClient.Lock()
-	defer seqr.httpClient.Unlock()
-
-	if dryRun {
-		// new simulation client
-		sim, err := alchemy.Dial(
-			config.SimulationProviderHTTP,
-			config.SequencerMaxConcurrency,
-			config.SequencerPrivateKey,
-		)
-		if err != nil {
-			return nil, err
-		}
-		// get current block
-		latest, err := seqr.httpClient.BlockNumber(ctx)
-		if err != nil {
-			return nil, err
-		}
-		// fork
-		_, err = sim.Reset(ctx, config.SequencerProviderHTTP, latest)
-		if err != nil {
-			return nil, err
-		}
-		// apply
-		return seqr.commitBatchWithClient(ctx, routerAddr, batch, sim)
-	} else {
-		return seqr.commitBatchWithClient(ctx, routerAddr, batch, seqr.httpClient)
+func (seqr *MemorySequencer) resetSim(ctx context.Context, latest uint64) (err error) {
+	seqr.log.Info().Msg("dial-client")
+	// new simulation client
+	seqr.simHttpClient, err = alchemy.Dial(
+		config.SimulationProviderHTTP,
+		config.SequencerMaxConcurrency,
+		config.SequencerPrivateKey,
+	)
+	if err != nil {
+		return err
 	}
-
-	// batch.Inc() // TODO: metrics
-	// cost, _ := weiToGwei(tx.Cost()).Float64()
-	// txCost.Observe(cost)
-
+	seqr.simWsClient, err = alchemy.Dial(
+		config.SimulationProviderWS,
+		config.SequencerMaxConcurrency,
+		config.SequencerPrivateKey,
+	)
+	if err != nil {
+		return err
+	}
+	// fork sim chain
+	seqr.log.Info().Msg("start-reset")
+	x, err := seqr.simHttpClient.Reset(ctx, config.SequencerProviderHTTP, latest)
+	if err != nil {
+		return err
+	}
+	seqr.log.Info().Msg("enable-automine")
+	_, err = seqr.simHttpClient.EnableAutoMine(ctx)
+	if err != nil {
+		return err
+	}
+	seqr.log.Info().Msgf("end-reset: url:%v, block:%v x:%v", config.SequencerProviderHTTP, latest, x)
+	// fork the simulated index
+	err = seqr.idxr.ResetSim(ctx, latest, seqr.simHttpClient, seqr.simWsClient)
+	if err != nil {
+		return err
+	}
+	seqr.log.Info().Msgf("idxr-reset: block:%v", latest)
+	return nil
 }
 
 func (seqr *MemorySequencer) commitBatchWithClient(
@@ -280,6 +331,8 @@ func (seqr *MemorySequencer) commitBatchWithClient(
 	batch *model.ActionBatch,
 	client *alchemy.Client,
 ) (*types.Receipt, error) {
+	client.Lock()
+	defer client.Unlock()
 	// prep action data
 	actions := [][][]byte{}
 	sigs := [][]byte{}
@@ -299,9 +352,9 @@ func (seqr *MemorySequencer) commitBatchWithClient(
 	}
 
 	txOpts.Context = ctx
-	txOpts.Value = big.NewInt(0) // in wei
-	// txOpts.GasLimit = uint64(3000000000)                                  // in units
-	// txOpts.GasPrice = txOpts.GasPrice.Mul(txOpts.GasPrice, big.NewInt(2)) // up to double
+	txOpts.Value = big.NewInt(0)         // in wei
+	txOpts.GasLimit = uint64(3000000000) // in units
+
 	tx, err := sessionRouter.Dispatch(txOpts,
 		actions,
 		sigs,
@@ -320,7 +373,8 @@ func (seqr *MemorySequencer) commitBatchWithClient(
 	switch rcpt.Status {
 	case 1:
 	default:
-		return nil, fmt.Errorf("tx failed: %v", rcpt)
+		reason := errorReason(ctx, client, client.Address(), tx, rcpt.BlockNumber)
+		return rcpt, fmt.Errorf("%s", reason)
 	}
 	return rcpt, nil
 }
@@ -341,9 +395,8 @@ func (seqr *MemorySequencer) Signout(ctx context.Context, routerAddr common.Addr
 	if err != nil {
 		return err
 	}
-	txOpts.Value = big.NewInt(0) // in wei
-	// txOpts.GasLimit = uint64(3000000)                                     // in units
-	// txOpts.GasPrice = txOpts.GasPrice.Mul(txOpts.GasPrice, big.NewInt(2)) // up to double
+	txOpts.Value = big.NewInt(0)      // in wei
+	txOpts.GasLimit = uint64(3000000) // in units
 
 	// decode the permit into sig parts
 	sig, err := hexutil.Decode(permit)
@@ -380,9 +433,8 @@ func (seqr *MemorySequencer) Signin(ctx context.Context, routerAddr common.Addre
 	if err != nil {
 		return err
 	}
-	txOpts.Value = big.NewInt(0) // in wei
-	// txOpts.GasLimit = uint64(3000000)                                     // in units
-	// txOpts.GasPrice = txOpts.GasPrice.Mul(txOpts.GasPrice, big.NewInt(2)) // up to double
+	txOpts.Value = big.NewInt(0)      // in wei
+	txOpts.GasLimit = uint64(3000000) // in units
 
 	// decode the permit into sig parts
 	sig, err := hexutil.Decode(permit)
@@ -403,10 +455,6 @@ func (seqr *MemorySequencer) Signin(ctx context.Context, routerAddr common.Addre
 		Msg("signin")
 	defer client.IncrementRelayNonce(ctx)
 
-	// batch.Inc() // TODO: metrics
-	// cost, _ := weiToGwei(tx.Cost()).Float64()
-	// txCost.Observe(cost)
-
 	// wait mined
 	maxWait, cancel := context.WithTimeout(ctx, 1*time.Minute)
 	defer cancel()
@@ -417,7 +465,7 @@ func (seqr *MemorySequencer) Signin(ctx context.Context, routerAddr common.Addre
 	switch rcpt.Status {
 	case 1:
 	default:
-		return fmt.Errorf("tx failed: %v", rcpt)
+		return fmt.Errorf("signin failed: %v", rcpt)
 	}
 
 	return nil
@@ -530,7 +578,7 @@ func inStatusList(haystack []model.ActionTransactionStatus, needle model.ActionT
 func ValidateActions(payloads []string, sig string) (*common.Address, error) {
 	byteArray, _ := abi.NewType("bytes[]", "bytes[]", nil)
 	args := abi.Arguments{
-		{Type: byteArray},
+		abi.Argument{Type: byteArray},
 	}
 	actions := [][]byte{}
 	for _, action := range payloads {
@@ -564,4 +612,23 @@ func ValidateActions(payloads []string, sig string) (*common.Address, error) {
 		return nil, fmt.Errorf("invalid action: bad signature")
 	}
 	return &signer, nil
+}
+
+func errorReason(ctx context.Context, b ethereum.ContractCaller, from common.Address, tx *types.Transaction, blockNum *big.Int) (reason string) {
+	msg := ethereum.CallMsg{
+		From:     from,
+		To:       tx.To(),
+		Gas:      tx.Gas(),
+		GasPrice: tx.GasPrice(),
+		Value:    tx.Value(),
+		Data:     tx.Data(),
+	}
+	_, err := b.CallContract(ctx, msg, blockNum)
+	if err != nil {
+		reason = err.Error()
+		reason = strings.TrimPrefix(reason, "CallContract: ")
+		reason = strings.TrimPrefix(reason, "execution reverted: ")
+		return reason
+	}
+	return "failed"
 }

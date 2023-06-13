@@ -70,6 +70,7 @@ func (rs *Watcher) Start(ctx context.Context) {
 
 	// watch all logs for contract addrs
 	if len(addrs) > 0 {
+		rs.log.Info().Msgf("watcher-start addrs:%v", addrs)
 		contractQuery := ethereum.FilterQuery{Addresses: addrs}
 		go rs.watch(ctx, contractQuery)
 		go rs.fetchEvents(ctx, contractQuery)
@@ -77,10 +78,12 @@ func (rs *Watcher) Start(ctx context.Context) {
 
 	// watch all event type accross all contracts
 	if len(rs.topic0) > 0 {
+		rs.log.Info().Msgf("watcher-start topic0:%v", rs.topic0)
 		topicQuery := ethereum.FilterQuery{Topics: [][]common.Hash{rs.topic0}}
 		go rs.watch(ctx, topicQuery)
 		go rs.fetchEvents(ctx, topicQuery)
 	}
+	rs.log.Info().Msgf("watcher-started addrs:%v topic0:%v", addrs, rs.topic0)
 }
 
 func (rs *Watcher) fetchEvents(ctx context.Context, query ethereum.FilterQuery) {

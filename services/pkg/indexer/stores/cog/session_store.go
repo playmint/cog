@@ -12,7 +12,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/playmint/ds-node/pkg/api/model"
 	"github.com/playmint/ds-node/pkg/client"
-	"github.com/playmint/ds-node/pkg/client/alchemy"
 	"github.com/playmint/ds-node/pkg/contracts/router"
 	"github.com/playmint/ds-node/pkg/indexer/eventwatcher"
 	"github.com/rs/zerolog"
@@ -25,19 +24,17 @@ type SessionStore struct {
 	sessions      *immutable.Map[string, *immutable.Map[string, *model.Session]]
 	abi           *abi.ABI
 	events        *eventwatcher.Watcher
-	client        *alchemy.Client
 	notifications chan interface{}
 	log           zerolog.Logger
 	sync.RWMutex
 }
 
-func NewSessionStore(ctx context.Context, client *alchemy.Client, watcher *eventwatcher.Watcher, notifications chan interface{}) (*SessionStore, error) {
+func NewSessionStore(ctx context.Context, watcher *eventwatcher.Watcher, notifications chan interface{}) (*SessionStore, error) {
 	cabi, err := abi.JSON(strings.NewReader(router.SessionRouterABI))
 	if err != nil {
 		return nil, err
 	}
 	store := &SessionStore{
-		client:        client,
 		abi:           &cabi,
 		events:        watcher,
 		notifications: notifications,
