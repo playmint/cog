@@ -2,10 +2,10 @@
 pragma solidity ^0.8.13;
 
 import "forge-std/Test.sol";
-import {BaseDispatcher, Dispatcher, DispatchUntrustedSender, Rule, Context} from "../src/Dispatcher.sol";
+import {BaseDispatcher, Dispatcher, Rule, Context} from "../src/Dispatcher.sol";
 import {State} from "../src/State.sol";
 import {StateGraph} from "../src/StateGraph.sol";
-import {SessionRouter, SessionUnauthorized, PREFIX_MESSAGE, REVOKE_MESSAGE} from "../src/SessionRouter.sol";
+import {SessionRouter, PREFIX_MESSAGE, REVOKE_MESSAGE} from "../src/SessionRouter.sol";
 
 import "./fixtures/TestActions.sol";
 import "./fixtures/TestRules.sol";
@@ -56,7 +56,7 @@ contract SessionRouterTest is Test {
 
     function testUnauthorizeSignerAsOwner() public {
         // should not be able to just sign actions with any old key
-        vm.expectRevert(SessionUnauthorized.selector);
+        vm.expectRevert("SessionUnauthorized");
         dispatchSigned(0x666);
         assertEq(state.getAddress(), address(0));
     }
@@ -109,7 +109,7 @@ contract SessionRouterTest is Test {
         router.revokeAddr(sessionAddr);
 
         // session signed actions should now fail...
-        vm.expectRevert(SessionUnauthorized.selector);
+        vm.expectRevert("SessionUnauthorized");
         dispatchSigned(sessionKey);
     }
 
@@ -131,7 +131,7 @@ contract SessionRouterTest is Test {
         router.revokeAddr(sessionAddr, sig);
 
         // session signed actions should now fail...
-        vm.expectRevert(SessionUnauthorized.selector);
+        vm.expectRevert("SessionUnauthorized");
         dispatchSigned(sessionKey);
     }
 
