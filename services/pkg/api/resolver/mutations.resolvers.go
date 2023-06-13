@@ -79,6 +79,7 @@ func (r *mutationResolver) Dispatch(ctx context.Context, gameID string, actions 
 		ctx,
 		game.RouterAddress,
 		common.HexToAddress(session.Owner),
+		game.StateAddress,
 		actions,
 		authorization,
 	)

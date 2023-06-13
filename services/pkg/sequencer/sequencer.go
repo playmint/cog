@@ -34,6 +34,7 @@ type Sequencer interface {
 		ctx context.Context,
 		routerAddress common.Address,
 		owner common.Address,
+		stateAddress common.Address,
 		actionPayload []string,
 		actionSig string,
 	) (*model.ActionTransaction, error)
@@ -131,6 +132,7 @@ func (seqr *MemorySequencer) emitTx(tx *model.ActionTransaction) {
 func (seqr *MemorySequencer) Enqueue(ctx context.Context,
 	routerAddr common.Address,
 	ownerAddr common.Address,
+	stateAddr common.Address,
 	actionData []string,
 	actionSig string,
 ) (*model.ActionTransaction, error) {
@@ -138,6 +140,7 @@ func (seqr *MemorySequencer) Enqueue(ctx context.Context,
 		return nil, fmt.Errorf("invalid action data")
 	}
 	seqr.Lock()
+	defer seqr.Unlock()
 
 	processingBatch, ok := seqr.processing[routerAddr.Hex()]
 	if !ok {
@@ -172,13 +175,17 @@ func (seqr *MemorySequencer) Enqueue(ctx context.Context,
 		pendingBatch,
 	}
 
-	seqr.Unlock()
-
 	if seqr.simBlock > 0 {
 		seqr.log.Info().
+			Uint64("block", seqr.simBlock).
 			Str("batch", pendingBatch.ID).
 			Msg("start-sim")
 		if err := seqr.resetSim(ctx, seqr.simBlock); err != nil {
+			return nil, err
+		}
+		// fork the simulated index
+		simxr, err := seqr.idxr.NewSim(ctx, seqr.simBlock, seqr.simHttpClient, seqr.simWsClient)
+		if err != nil {
 			return nil, err
 		}
 		for _, batch := range simulatedBatches {
@@ -191,12 +198,16 @@ func (seqr *MemorySequencer) Enqueue(ctx context.Context,
 				return nil, err
 			}
 		}
+		seqr.idxr.SetSim(simxr)
+		seqr.notifications <- &model.StateEvent{
+			Event:   &model.SetAnnotationEvent{},
+			StateID: stateAddr.Hex(),
+		}
 		seqr.log.Info().
 			Str("batch", pendingBatch.ID).
 			Msg("end-sim-ok")
 	}
 
-	seqr.Lock()
 	actualPending, ok = seqr.pending[routerAddr.Hex()]
 	if !ok {
 		actualPending = &model.ActionBatch{
@@ -208,10 +219,9 @@ func (seqr *MemorySequencer) Enqueue(ctx context.Context,
 	actualPending.Transactions = append(actualPending.Transactions, tx)
 	seqr.pending[routerAddr.Hex()] = actualPending
 	seqr.emitTx(tx)
-	seqr.Unlock()
 
 	seqr.log.Info().
-		Str("batch", pendingBatch.ID).
+		Str("batch", actualPending.ID).
 		Str("tx", tx.ID).
 		Msg("queued")
 
@@ -316,12 +326,6 @@ func (seqr *MemorySequencer) resetSim(ctx context.Context, latest uint64) (err e
 		return err
 	}
 	seqr.log.Info().Msgf("end-reset: url:%v, block:%v x:%v", config.SequencerProviderHTTP, latest, x)
-	// fork the simulated index
-	err = seqr.idxr.ResetSim(ctx, latest, seqr.simHttpClient, seqr.simWsClient)
-	if err != nil {
-		return err
-	}
-	seqr.log.Info().Msgf("idxr-reset: block:%v", latest)
 	return nil
 }
 
@@ -410,10 +414,6 @@ func (seqr *MemorySequencer) Signout(ctx context.Context, routerAddr common.Addr
 	}
 	defer client.IncrementRelayNonce(ctx)
 
-	// batch.Inc() // TODO: metrics
-	// cost, _ := weiToGwei(tx.Cost()).Float64()
-	// txCost.Observe(cost)
-
 	return nil
 }
 
@@ -466,6 +466,12 @@ func (seqr *MemorySequencer) Signin(ctx context.Context, routerAddr common.Addre
 	case 1:
 	default:
 		return fmt.Errorf("signin failed: %v", rcpt)
+	}
+
+	if rcpt.BlockNumber.Uint64() > seqr.simBlock {
+		seqr.Lock()
+		seqr.simBlock = rcpt.BlockNumber.Uint64()
+		seqr.Unlock()
 	}
 
 	return nil

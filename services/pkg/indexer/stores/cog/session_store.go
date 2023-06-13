@@ -4,14 +4,11 @@ import (
 	"context"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/benbjohnson/immutable"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/playmint/ds-node/pkg/api/model"
-	"github.com/playmint/ds-node/pkg/client"
 	"github.com/playmint/ds-node/pkg/contracts/router"
 	"github.com/playmint/ds-node/pkg/indexer/eventwatcher"
 	"github.com/rs/zerolog"
@@ -58,35 +55,34 @@ func (rs *SessionStore) emitSession(s *model.Session) {
 	rs.notifications <- s
 }
 
-func (rs *SessionStore) watch(ctx context.Context, events chan types.Log) {
+func (rs *SessionStore) watch(ctx context.Context, blocks chan *eventwatcher.LogBatch) {
 	for {
 		select {
 		case <-ctx.Done():
 			return
-		case rawEvent := <-events:
-			eventABI, err := rs.abi.EventByID(rawEvent.Topics[0])
-			if err != nil {
-				rs.log.Warn().Err(err).Msg("unhandleable event topic")
-				continue
-			}
-			rs.log.Debug().Msgf("recv %v", eventABI.RawName)
-			switch eventABI.RawName {
-			case "SessionCreate":
-				var evt router.SessionRouterSessionCreate
-				if err := unpackLog(rs.abi, &evt, eventABI.RawName, rawEvent); err != nil {
-					rs.log.Warn().Err(err).Msgf("undecodable %T event", evt)
+		case block := <-blocks:
+			for _, rawEvent := range block.Logs {
+				eventABI, err := rs.abi.EventByID(rawEvent.Topics[0])
+				if err != nil {
+					rs.log.Warn().Err(err).Msg("unhandleable event topic")
 					continue
 				}
-				evt.Raw = rawEvent
-				err := rs.setSession(&evt)
-				if err != nil && client.IsRetryable(err) {
-					time.Sleep(1 * time.Second)
-					events <- rawEvent
-				} else if err != nil {
-					rs.log.Error().Err(err).Msgf("failed process %T event", evt)
+				rs.log.Debug().Msgf("recv %v", eventABI.RawName)
+				switch eventABI.RawName {
+				case "SessionCreate":
+					var evt router.SessionRouterSessionCreate
+					if err := unpackLog(rs.abi, &evt, eventABI.RawName, rawEvent); err != nil {
+						rs.log.Warn().Err(err).Msgf("undecodable %T event", evt)
+						continue
+					}
+					evt.Raw = rawEvent
+					err := rs.setSession(&evt)
+					if err != nil {
+						rs.log.Error().Err(err).Msgf("failed process %T event", evt)
+					}
+				default:
+					rs.log.Warn().Msgf("ignoring unhandled event type %v", eventABI)
 				}
-			default:
-				rs.log.Warn().Msgf("ignoring unhandled event type %v", eventABI)
 			}
 		}
 	}

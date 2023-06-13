@@ -5,14 +5,11 @@ import (
 	"fmt"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/playmint/ds-node/pkg/api/model"
-	"github.com/playmint/ds-node/pkg/client"
 	"github.com/playmint/ds-node/pkg/contracts/state"
 	"github.com/playmint/ds-node/pkg/indexer/eventwatcher"
 	"github.com/rs/zerolog"
@@ -21,6 +18,7 @@ import (
 
 type StateStore struct {
 	graphs        map[common.Address]*model.Graph
+	live          map[common.Address]*model.Graph
 	abi           *abi.ABI
 	notifications chan interface{}
 	log           zerolog.Logger
@@ -35,6 +33,7 @@ func NewStateStore(ctx context.Context, watcher *eventwatcher.Watcher, notificat
 	}
 	store := &StateStore{
 		graphs:        map[common.Address]*model.Graph{},
+		live:          map[common.Address]*model.Graph{},
 		abi:           &cabi,
 		notifications: notifications,
 		name:          "og",
@@ -46,21 +45,28 @@ func NewStateStore(ctx context.Context, watcher *eventwatcher.Watcher, notificat
 
 func (rs *StateStore) Fork(ctx context.Context, watcher *eventwatcher.Watcher) *StateStore {
 	newStore := &StateStore{
-		graphs:        rs.graphs,
+		graphs:        map[common.Address]*model.Graph{},
+		live:          map[common.Address]*model.Graph{},
 		abi:           rs.abi,
 		notifications: rs.notifications,
 		log:           rs.log,
 		name:          "forked",
+	}
+	for addr, g := range rs.graphs {
+		newStore.graphs[addr] = g
+	}
+	for addr, g := range rs.live {
+		newStore.live[addr] = g
 	}
 	newStore.watch(ctx, watcher)
 	return newStore
 }
 
 func (rs *StateStore) emitStateEvent(stateAddr common.Address, stateEvent model.Event) {
-	rs.notifications <- &model.StateEvent{
-		Event:   stateEvent,
-		StateID: stateAddr.Hex(),
-	}
+	// rs.notifications <- &model.StateEvent{
+	// 	Event:   stateEvent,
+	// 	StateID: stateAddr.Hex(),
+	// }
 }
 
 func (rs *StateStore) watch(ctx context.Context, watcher *eventwatcher.Watcher) {
@@ -80,92 +86,87 @@ func (rs *StateStore) watch(ctx context.Context, watcher *eventwatcher.Watcher) 
 	go rs.watchLoop(ctx, events)
 }
 
-func (rs *StateStore) watchLoop(ctx context.Context, events chan types.Log) {
+func (rs *StateStore) watchLoop(ctx context.Context, blocks chan *eventwatcher.LogBatch) {
 	for {
 		select {
 		case <-ctx.Done():
 			return
-		case rawEvent := <-events:
-			rs.log.Info().Str("indexer", rs.name).Msgf("got event %v", rawEvent)
-			eventABI, err := rs.abi.EventByID(rawEvent.Topics[0])
-			if err != nil {
-				rs.log.Warn().Err(err).Msg("unhandleable event topic")
-				continue
+		case block := <-blocks:
+			for _, rawEvent := range block.Logs {
+				rs.log.Info().Str("indexer", rs.name).Msgf("got event %v", rawEvent)
+				eventABI, err := rs.abi.EventByID(rawEvent.Topics[0])
+				if err != nil {
+					rs.log.Warn().Err(err).Msg("unhandleable event topic")
+					continue
+				}
+				rs.log.Debug().Msgf("recv %v", eventABI.RawName)
+				switch eventABI.RawName {
+				case "AnnotationSet":
+					var evt state.StateAnnotationSet
+					if err := unpackLog(rs.abi, &evt, eventABI.RawName, rawEvent); err != nil {
+						rs.log.Warn().Err(err).Msgf("undecodable %T event", evt)
+						continue
+					}
+					evt.Raw = rawEvent
+					err := rs.setAnnotation(&evt)
+					if err != nil {
+						rs.log.Error().Err(err).Msgf("failed process %T event", evt)
+					}
+				case "EdgeSet":
+					var evt state.StateEdgeSet
+					if err := unpackLog(rs.abi, &evt, eventABI.RawName, rawEvent); err != nil {
+						rs.log.Warn().Err(err).Msgf("undecodable %T event", evt)
+						continue
+					}
+					evt.Raw = rawEvent
+					err := rs.setEdge(&evt)
+					if err != nil {
+						rs.log.Error().Err(err).Msgf("failed process %T event", evt)
+					}
+				case "EdgeRemove":
+					var evt state.StateEdgeRemove
+					if err := unpackLog(rs.abi, &evt, eventABI.RawName, rawEvent); err != nil {
+						rs.log.Warn().Err(err).Msgf("undecodable %T event", evt)
+						continue
+					}
+					evt.Raw = rawEvent
+					err := rs.removeEdge(&evt)
+					if err != nil {
+						rs.log.Error().Err(err).Msgf("failed process %T event", evt)
+					}
+				case "NodeTypeRegister":
+					var evt state.StateNodeTypeRegister
+					if err := unpackLog(rs.abi, &evt, eventABI.RawName, rawEvent); err != nil {
+						rs.log.Warn().Err(err).Msgf("undecodable %T event", evt)
+						continue
+					}
+					evt.Raw = rawEvent
+					err := rs.setNodeType(&evt)
+					if err != nil {
+						rs.log.Error().Err(err).Msgf("failed process %T event", evt)
+					}
+				case "EdgeTypeRegister":
+					var evt state.StateEdgeTypeRegister
+					if err := unpackLog(rs.abi, &evt, eventABI.RawName, rawEvent); err != nil {
+						rs.log.Warn().Err(err).Msgf("undecodable %T event", evt)
+						continue
+					}
+					evt.Raw = rawEvent
+					err := rs.setEdgeType(&evt)
+					if err != nil {
+						rs.log.Error().Err(err).Msgf("failed process %T event", evt)
+					}
+				default:
+					rs.log.Warn().Msgf("ignoring unhandled event type %v", eventABI)
+				}
+
 			}
-			rs.log.Debug().Msgf("recv %v", eventABI.RawName)
-			switch eventABI.RawName {
-			case "AnnotationSet":
-				var evt state.StateAnnotationSet
-				if err := unpackLog(rs.abi, &evt, eventABI.RawName, rawEvent); err != nil {
-					rs.log.Warn().Err(err).Msgf("undecodable %T event", evt)
-					continue
+			for addr, g := range rs.graphs {
+				rs.live[addr] = g
+				rs.notifications <- &model.StateEvent{
+					Event:   &model.SetAnnotationEvent{}, // just using this as a proxy to mean "an update arrived" for now
+					StateID: addr.Hex(),
 				}
-				evt.Raw = rawEvent
-				err := rs.setAnnotation(&evt)
-				if err != nil && client.IsRetryable(err) {
-					time.Sleep(1 * time.Second)
-					events <- rawEvent
-				} else if err != nil {
-					rs.log.Error().Err(err).Msgf("failed process %T event", evt)
-				}
-			case "EdgeSet":
-				var evt state.StateEdgeSet
-				if err := unpackLog(rs.abi, &evt, eventABI.RawName, rawEvent); err != nil {
-					rs.log.Warn().Err(err).Msgf("undecodable %T event", evt)
-					continue
-				}
-				evt.Raw = rawEvent
-				err := rs.setEdge(&evt)
-				if err != nil && client.IsRetryable(err) {
-					time.Sleep(1 * time.Second)
-					events <- rawEvent
-				} else if err != nil {
-					rs.log.Error().Err(err).Msgf("failed process %T event", evt)
-				}
-			case "EdgeRemove":
-				var evt state.StateEdgeRemove
-				if err := unpackLog(rs.abi, &evt, eventABI.RawName, rawEvent); err != nil {
-					rs.log.Warn().Err(err).Msgf("undecodable %T event", evt)
-					continue
-				}
-				evt.Raw = rawEvent
-				err := rs.removeEdge(&evt)
-				if err != nil && client.IsRetryable(err) {
-					time.Sleep(1 * time.Second)
-					events <- rawEvent
-				} else if err != nil {
-					rs.log.Error().Err(err).Msgf("failed process %T event", evt)
-				}
-			case "NodeTypeRegister":
-				var evt state.StateNodeTypeRegister
-				if err := unpackLog(rs.abi, &evt, eventABI.RawName, rawEvent); err != nil {
-					rs.log.Warn().Err(err).Msgf("undecodable %T event", evt)
-					continue
-				}
-				evt.Raw = rawEvent
-				err := rs.setNodeType(&evt)
-				if err != nil && client.IsRetryable(err) {
-					time.Sleep(1 * time.Second)
-					events <- rawEvent
-				} else if err != nil {
-					rs.log.Error().Err(err).Msgf("failed process %T event", evt)
-				}
-			case "EdgeTypeRegister":
-				var evt state.StateEdgeTypeRegister
-				if err := unpackLog(rs.abi, &evt, eventABI.RawName, rawEvent); err != nil {
-					rs.log.Warn().Err(err).Msgf("undecodable %T event", evt)
-					continue
-				}
-				evt.Raw = rawEvent
-				err := rs.setEdgeType(&evt)
-				if err != nil && client.IsRetryable(err) {
-					time.Sleep(1 * time.Second)
-					events <- rawEvent
-				} else if err != nil {
-					rs.log.Error().Err(err).Msgf("failed process %T event", evt)
-				}
-			default:
-				rs.log.Warn().Msgf("ignoring unhandled event type %v", eventABI)
 			}
 		}
 	}
@@ -314,5 +315,5 @@ func (rs *StateStore) removeEdge(evt *state.StateEdgeRemove) error {
 func (rs *StateStore) GetGraph(stateContractAddr common.Address) *model.Graph {
 	rs.RLock()
 	defer rs.RUnlock()
-	return rs.graphs[stateContractAddr]
+	return rs.live[stateContractAddr]
 }

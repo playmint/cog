@@ -21,8 +21,9 @@ type Indexer interface {
 	GetGraph(stateContractAddr common.Address) *model.Graph
 	GetSession(routerAddr common.Address, sessionID string) *model.Session
 	GetSessions(routerAddr common.Address, owner *string) []*model.Session
-	ResetSim(ctx context.Context, blockNumber uint64, httpSimClient *alchemy.Client, wsSimClient *alchemy.Client) error
-	GetSim() Indexer
+	NewSim(ctx context.Context, blockNumber uint64, httpSimClient *alchemy.Client, wsSimClient *alchemy.Client) (*MemoryIndexer, error)
+	GetSim() *MemoryIndexer
+	SetSim(*MemoryIndexer)
 }
 
 var _ Indexer = &MemoryIndexer{}
@@ -36,7 +37,7 @@ type MemoryIndexer struct {
 	events        *eventwatcher.Watcher
 	httpClient    *alchemy.Client
 	wsClient      *alchemy.Client
-	sim           Indexer
+	sim           *MemoryIndexer
 }
 
 func NewMemoryIndexer(ctx context.Context, notifications chan interface{}, httpProviderURL string, wsProviderURL string) (*MemoryIndexer, error) {
@@ -126,7 +127,10 @@ func NewMemoryIndexer(ctx context.Context, notifications chan interface{}, httpP
 	return idxr, nil
 }
 
-func (idxr *MemoryIndexer) ResetSim(ctx context.Context, blockNumber uint64, httpSimClient *alchemy.Client, wsSimClient *alchemy.Client) error {
+func (idxr *MemoryIndexer) NewSim(ctx context.Context, blockNumber uint64, httpSimClient *alchemy.Client, wsSimClient *alchemy.Client) (*MemoryIndexer, error) {
+	if idxr.sim != nil {
+		idxr.sim.events.Stop()
+	}
 	events, err := eventwatcher.New(eventwatcher.Config{
 		HTTPClient:  httpSimClient,
 		Websocket:   wsSimClient,
@@ -135,14 +139,14 @@ func (idxr *MemoryIndexer) ResetSim(ctx context.Context, blockNumber uint64, htt
 		EpochBlock:  int64(blockNumber),
 	})
 	if err != nil {
-		return err
+		return nil, err
 	}
 	// clone this indexer
 	newIdxr := &MemoryIndexer{
 		configStore:   idxr.configStore,
 		gameStore:     idxr.gameStore.Fork(ctx, events, httpSimClient), // FIXME: fork it proper
-		stateStore:    idxr.stateStore.Fork(ctx, events),               // FIXME: close old fork
-		sessionStore:  idxr.sessionStore,                               // FIXME fork it
+		stateStore:    idxr.stateStore.Fork(ctx, events),
+		sessionStore:  idxr.sessionStore, // FIXME fork it
 		notifications: idxr.notifications,
 		events:        events,
 		httpClient:    httpSimClient,
@@ -150,12 +154,14 @@ func (idxr *MemoryIndexer) ResetSim(ctx context.Context, blockNumber uint64, htt
 	}
 	newIdxr.events.Start(ctx)
 	<-newIdxr.events.Ready()
-	idxr.sim = newIdxr
-	return nil
-
+	return newIdxr, nil
 }
 
-func (idxr *MemoryIndexer) GetSim() Indexer {
+func (idxr *MemoryIndexer) SetSim(sim *MemoryIndexer) {
+	idxr.sim = sim
+}
+
+func (idxr *MemoryIndexer) GetSim() *MemoryIndexer {
 	return idxr.sim
 }
 

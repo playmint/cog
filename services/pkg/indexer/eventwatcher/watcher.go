@@ -23,6 +23,11 @@ type EventBatch struct {
 	ToBlock   int64
 }
 
+type LogBatch struct {
+	EventBatch
+	Logs []types.Log
+}
+
 type Config struct {
 	Websocket   *alchemy.Client
 	HTTPClient  *alchemy.Client
@@ -32,13 +37,13 @@ type Config struct {
 }
 
 type Watcher struct {
-	sink      chan types.Log
-	ready     chan struct{}
-	contracts map[common.Address][]chan types.Log
-	topics    map[common.Hash][]chan types.Log
-	topic0    []common.Hash // event types to watch
-	config    Config
-	log       zerolog.Logger
+	sink        chan *LogBatch
+	ready       chan struct{}
+	subscribers []chan *LogBatch
+	topic0      []common.Hash
+	config      Config
+	log         zerolog.Logger
+	stop        func()
 }
 
 func New(cfg Config) (*Watcher, error) {
@@ -49,41 +54,27 @@ func New(cfg Config) (*Watcher, error) {
 		return nil, fmt.Errorf("invalid concurrency config")
 	}
 	return &Watcher{
-		sink:      make(chan types.Log, 1024),
-		contracts: map[common.Address][]chan types.Log{},
-		topics:    map[common.Hash][]chan types.Log{},
-		ready:     make(chan struct{}),
-		config:    cfg,
-		log:       log.With().Str("service", "indexer").Str("component", "eventwatcher").Logger(),
+		sink:        make(chan *LogBatch, 1024),
+		subscribers: []chan *LogBatch{},
+		ready:       make(chan struct{}),
+		config:      cfg,
+		log:         log.With().Str("service", "indexer").Str("component", "eventwatcher").Logger(),
 	}, nil
 }
 
+func (rs *Watcher) Stop() {
+	if rs.stop != nil {
+		rs.stop()
+	}
+}
+
 func (rs *Watcher) Start(ctx context.Context) {
-	addrs := []common.Address{}
-	for addr := range rs.contracts {
-		addrs = append(addrs, addr)
-	}
-
-	if len(addrs) > 0 && len(rs.topic0) > 0 {
-		panic("watching both topics and contracts via the same watcher not supported yet as we need to be able to keep the events ordered")
-	}
-
-	// watch all logs for contract addrs
-	if len(addrs) > 0 {
-		rs.log.Info().Msgf("watcher-start addrs:%v", addrs)
-		contractQuery := ethereum.FilterQuery{Addresses: addrs}
-		go rs.watch(ctx, contractQuery)
-		go rs.fetchEvents(ctx, contractQuery)
-	}
-
-	// watch all event type accross all contracts
-	if len(rs.topic0) > 0 {
-		rs.log.Info().Msgf("watcher-start topic0:%v", rs.topic0)
-		topicQuery := ethereum.FilterQuery{Topics: [][]common.Hash{rs.topic0}}
-		go rs.watch(ctx, topicQuery)
-		go rs.fetchEvents(ctx, topicQuery)
-	}
-	rs.log.Info().Msgf("watcher-started addrs:%v topic0:%v", addrs, rs.topic0)
+	rs.log.Info().Msgf("watcher-start")
+	topicQuery := ethereum.FilterQuery{Topics: [][]common.Hash{rs.topic0}}
+	ctx, rs.stop = context.WithCancel(ctx)
+	go rs.watch(ctx, topicQuery)
+	go rs.fetchEvents(ctx, topicQuery)
+	go rs.publisher(ctx)
 }
 
 func (rs *Watcher) fetchEvents(ctx context.Context, query ethereum.FilterQuery) {
@@ -155,30 +146,34 @@ func (rs *Watcher) fetchEventsWorker(ctx context.Context, batches chan EventBatc
 }
 
 func (rs *Watcher) getBatch(ctx context.Context, batch EventBatch, query ethereum.FilterQuery) error {
-	rs.log.Info().
-		Int64("from", batch.FromBlock).
-		Int64("to", batch.ToBlock).
-		Msg("searching")
 	query.FromBlock = big.NewInt(batch.FromBlock)
 	query.ToBlock = big.NewInt(batch.ToBlock)
 	logs, err := rs.config.HTTPClient.FilterLogs(ctx, query)
 	if err != nil {
 		return err
 	}
-	for _, log := range logs {
-		rs.sink <- log
+	rs.sink <- &LogBatch{
+		EventBatch: batch,
+		Logs:       logs,
 	}
+	rs.log.Info().
+		Int64("from", batch.FromBlock).
+		Int64("to", batch.ToBlock).
+		Int("logs", len(logs)).
+		Msg("searching")
 	return nil
 }
 
-func (rs *Watcher) watch(ctx context.Context, watchQuery ethereum.FilterQuery) {
+func (rs *Watcher) watch(ctx context.Context, query ethereum.FilterQuery) {
+	<-rs.ready
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		default:
 		}
-		sub, err := rs.config.Websocket.SubscribeFilterLogs(ctx, watchQuery, rs.sink)
+		blocks := make(chan *types.Header, 32)
+		sub, err := rs.config.Websocket.SubscribeNewHead(ctx, blocks)
 		if err != nil {
 			rs.log.Error().
 				Err(err).
@@ -186,11 +181,11 @@ func (rs *Watcher) watch(ctx context.Context, watchQuery ethereum.FilterQuery) {
 			time.Sleep(time.Second * 2)
 			continue
 		}
-		rs.watcher(ctx, sub)
+		rs.watcher(ctx, sub, blocks, query)
 	}
 }
 
-func (rs *Watcher) watcher(ctx context.Context, sub event.Subscription) {
+func (rs *Watcher) watcher(ctx context.Context, sub event.Subscription, blocks chan *types.Header, query ethereum.FilterQuery) {
 	rs.log.Info().Msg("started")
 	defer rs.log.Info().Msg("stopped")
 	defer sub.Unsubscribe()
@@ -199,22 +194,40 @@ func (rs *Watcher) watcher(ctx context.Context, sub event.Subscription) {
 		case err := <-sub.Err():
 			rs.log.Error().
 				Err(err).
-				Msg("watcher-err")
+				Msg("watcher-sub-err")
 			return
-		case evt := <-rs.sink:
-			contractSubscribers, ok := rs.contracts[evt.Address]
-			if ok {
-				for _, sub := range contractSubscribers {
-					sub <- evt
+		case block := <-blocks:
+			retries := 0
+		retry:
+			err := rs.getBatch(ctx, EventBatch{
+				FromBlock: block.Number.Int64() - 1,
+				ToBlock:   block.Number.Int64(),
+			}, query)
+			if err != nil {
+				if client.IsRetryable(err) {
+					if retries < 5 {
+						retries++
+						time.Sleep(1 * time.Second)
+						goto retry
+					} else {
+						panic(err)
+					}
+				} else {
+					panic(err) // if we can't read a block we cannot sync so bang!
 				}
 			}
-			if len(evt.Topics) > 0 {
-				topicSubscribers, ok := rs.topics[evt.Topics[0]]
-				if ok {
-					for _, sub := range topicSubscribers {
-						sub <- evt
-					}
-				}
+		case <-ctx.Done():
+			return
+		}
+	}
+}
+
+func (rs *Watcher) publisher(ctx context.Context) {
+	for {
+		select {
+		case logs := <-rs.sink:
+			for _, sub := range rs.subscribers {
+				sub <- logs
 			}
 		case <-ctx.Done():
 			return
@@ -226,17 +239,11 @@ func (rs *Watcher) Ready() chan struct{} {
 	return rs.ready
 }
 
-func (rs *Watcher) Subscribe(address common.Address) chan types.Log {
-	ch := make(chan types.Log, 1024)
-	rs.contracts[address] = append(rs.contracts[address], ch)
-	return ch
-}
-
-func (rs *Watcher) SubscribeTopic(eventTypes []common.Hash) chan types.Log {
-	ch := make(chan types.Log, 1024)
+func (rs *Watcher) SubscribeTopic(eventTypes []common.Hash) chan *LogBatch {
+	ch := make(chan *LogBatch, 1024)
 	for _, topic := range eventTypes {
 		rs.topic0 = append(rs.topic0, topic)
-		rs.topics[topic] = append(rs.topics[topic], ch)
+		rs.subscribers = append(rs.subscribers, ch)
 	}
 	return ch
 }
