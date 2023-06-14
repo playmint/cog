@@ -93,7 +93,6 @@ func (rs *StateStore) watchLoop(ctx context.Context, blocks chan *eventwatcher.L
 			return
 		case block := <-blocks:
 			for _, rawEvent := range block.Logs {
-				rs.log.Info().Str("indexer", rs.name).Msgf("got event %v", rawEvent)
 				eventABI, err := rs.abi.EventByID(rawEvent.Topics[0])
 				if err != nil {
 					rs.log.Warn().Err(err).Msg("unhandleable event topic")
