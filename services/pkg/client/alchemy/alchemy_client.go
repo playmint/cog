@@ -148,6 +148,15 @@ func (c *Client) EnableAutoMine(ctx context.Context) (*json.RawMessage, error) {
 	return &res, nil
 }
 
+func (c *Client) MineEmptyBlock(ctx context.Context) (*json.RawMessage, error) {
+	var res json.RawMessage
+	err := c.rpc.CallContext(ctx, &res, "anvil_mine", 1)
+	if err != nil {
+		return nil, err
+	}
+	return &res, nil
+}
+
 func (c *Client) EstimateContractGas(ctx context.Context, opts *bind.TransactOpts, contract *common.Address, input []byte) error {
 
 	// head header
