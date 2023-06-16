@@ -216,6 +216,13 @@ func (seqr *MemorySequencer) commit(ctx context.Context) {
 		} else {
 			seqr.log.Info().
 				Msg("mine-empty-block")
+			latestBlock, err = seqr.httpClient.BlockNumber(ctx)
+			if err != nil {
+				seqr.log.Error().
+					Err(err).
+					Msg("mine-empty-block-get-block")
+				return
+			}
 		}
 	}
 
