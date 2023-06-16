@@ -98,7 +98,7 @@ func NewMemorySequencer(ctx context.Context, key *ecdsa.PrivateKey, notification
 	seqr.failure = map[string][]*model.ActionBatch{}
 
 	// drain the queue every few seconds
-	timer := time.NewTimer(time.Duration(1 * time.Second))
+	timer := time.NewTimer(time.Duration(10 * time.Second))
 	shutdown := ctx.Done()
 	go func() {
 		for {
