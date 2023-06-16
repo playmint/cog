@@ -64,7 +64,7 @@ func (rs *SessionStore) watch(ctx context.Context, blocks chan *eventwatcher.Log
 			for _, rawEvent := range block.Logs {
 				eventABI, err := rs.abi.EventByID(rawEvent.Topics[0])
 				if err != nil {
-					rs.log.Warn().Err(err).Msg("unhandleable event topic")
+					rs.log.Debug().Msgf("unhandleable event topic: %v", err)
 					continue
 				}
 				rs.log.Debug().Msgf("recv %v", eventABI.RawName)
