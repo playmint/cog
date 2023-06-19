@@ -44,10 +44,12 @@ func NewStateStore(ctx context.Context, watcher *eventwatcher.Watcher, notificat
 
 func (rs *StateStore) Fork(ctx context.Context, watcher *eventwatcher.Watcher, blockNumber uint64) *StateStore {
 	rs.Lock()
-	defer rs.Unlock()
+	latest := rs.latest
+	rs.Unlock()
 
 	// wait til store contains blockNumber if we are behind
-	if rs.latest < blockNumber {
+	if latest < blockNumber {
+		rs.Lock()
 		wg, ok := rs.wg[blockNumber]
 		if !ok {
 			wg = &sync.WaitGroup{}
@@ -55,8 +57,12 @@ func (rs *StateStore) Fork(ctx context.Context, watcher *eventwatcher.Watcher, b
 			rs.wg[blockNumber] = wg
 		}
 		rs.log.Warn().Uint64("block", blockNumber).Msgf("fork-wait")
+		rs.Unlock()
 		wg.Wait()
 	}
+
+	rs.Lock()
+	defer rs.Unlock()
 
 	newStore := &StateStore{
 		graphs:        map[uint64]map[common.Address]*model.Graph{},
