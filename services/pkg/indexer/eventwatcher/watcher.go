@@ -34,6 +34,7 @@ type Config struct {
 	Concurrency int
 	EpochBlock  int64
 	LogRange    int
+	Name        string
 }
 
 type Watcher struct {
@@ -58,7 +59,7 @@ func New(cfg Config) (*Watcher, error) {
 		subscribers: []chan *LogBatch{},
 		ready:       make(chan struct{}),
 		config:      cfg,
-		log:         log.With().Str("service", "indexer").Str("component", "eventwatcher").Logger(),
+		log:         log.With().Str("service", "indexer").Str("component", "eventwatcher").Str("name", cfg.Name).Logger(),
 	}, nil
 }
 
@@ -241,9 +242,9 @@ func (rs *Watcher) Ready() chan struct{} {
 
 func (rs *Watcher) SubscribeTopic(eventTypes []common.Hash) chan *LogBatch {
 	ch := make(chan *LogBatch, 1024)
+	rs.subscribers = append(rs.subscribers, ch)
 	for _, topic := range eventTypes {
 		rs.topic0 = append(rs.topic0, topic)
-		rs.subscribers = append(rs.subscribers, ch)
 	}
 	return ch
 }

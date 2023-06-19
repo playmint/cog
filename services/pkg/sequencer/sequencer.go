@@ -98,7 +98,7 @@ func NewMemorySequencer(ctx context.Context, key *ecdsa.PrivateKey, notification
 	seqr.failure = map[string][]*model.ActionBatch{}
 
 	// drain the queue every few seconds
-	timer := time.NewTimer(time.Duration(10 * time.Second))
+	timer := time.NewTimer(time.Duration(60 * time.Second))
 	shutdown := ctx.Done()
 	go func() {
 		for {
@@ -174,6 +174,7 @@ func (seqr *MemorySequencer) Enqueue(ctx context.Context,
 			Uint64("block", seqr.simBlock).
 			Str("batch", "sim").
 			Msg("sim-tx-ok")
+		seqr.idxr.Notify()
 	} else {
 		seqr.log.Info().
 			Uint64("block", seqr.simBlock).
@@ -307,6 +308,7 @@ func (seqr *MemorySequencer) commit(ctx context.Context) {
 				seqr.log.Info().
 					Uint64("block", seqr.simBlock).
 					Msg("reset-sim-ok")
+				seqr.idxr.Notify()
 			}
 		}
 	}
@@ -387,6 +389,7 @@ func (seqr *MemorySequencer) commitTxWithClient(
 	// wait til batch success
 	maxWait, cancel := context.WithTimeout(ctx, 1*time.Minute)
 	defer cancel()
+	time.Sleep(50 * time.Millisecond)
 	rcpt, err := bind.WaitMined(maxWait, client, tx)
 	if err != nil {
 		return nil, err
@@ -498,7 +501,7 @@ func (seqr *MemorySequencer) Signin(ctx context.Context, routerAddr common.Addre
 				Msg("reset-sim-fail")
 		} else {
 			// fork the simulated index
-			simxr, err := seqr.idxr.NewSim(ctx, seqr.simBlock, seqr.simHttpClient, seqr.simWsClient)
+			simxr, err := seqr.idxr.NewSim(ctx, seqr.simBlock-1, seqr.simHttpClient, seqr.simWsClient)
 			if err != nil {
 				seqr.log.Error().
 					Err(err).
@@ -522,6 +525,7 @@ func (seqr *MemorySequencer) Signin(ctx context.Context, routerAddr common.Addre
 				seqr.log.Info().
 					Uint64("block", seqr.simBlock).
 					Msg("reset-sim-ok")
+				seqr.idxr.Notify()
 			}
 		}
 		seqr.Unlock()

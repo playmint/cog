@@ -2,6 +2,7 @@ package indexer
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/playmint/ds-node/pkg/api/model"
@@ -24,6 +25,7 @@ type Indexer interface {
 	NewSim(ctx context.Context, blockNumber uint64, httpSimClient *alchemy.Client, wsSimClient *alchemy.Client) (*MemoryIndexer, error)
 	GetSim() *MemoryIndexer
 	SetSim(*MemoryIndexer)
+	Notify()
 }
 
 var _ Indexer = &MemoryIndexer{}
@@ -137,6 +139,7 @@ func (idxr *MemoryIndexer) NewSim(ctx context.Context, blockNumber uint64, httpS
 		Concurrency: 1,
 		LogRange:    config.IndexerMaxLogRange,
 		EpochBlock:  int64(blockNumber),
+		Name:        fmt.Sprintf("fork-%d", blockNumber),
 	})
 	if err != nil {
 		return nil, err
@@ -144,9 +147,9 @@ func (idxr *MemoryIndexer) NewSim(ctx context.Context, blockNumber uint64, httpS
 	// clone this indexer
 	newIdxr := &MemoryIndexer{
 		configStore:   idxr.configStore,
-		gameStore:     idxr.gameStore.Fork(ctx, events, httpSimClient), // FIXME: fork it proper
-		stateStore:    idxr.stateStore.Fork(ctx, events),
-		sessionStore:  idxr.sessionStore, // FIXME fork it
+		gameStore:     idxr.gameStore,
+		stateStore:    idxr.stateStore.Fork(ctx, events, blockNumber),
+		sessionStore:  idxr.sessionStore,
 		notifications: idxr.notifications,
 		events:        events,
 		httpClient:    httpSimClient,
@@ -155,6 +158,12 @@ func (idxr *MemoryIndexer) NewSim(ctx context.Context, blockNumber uint64, httpS
 	newIdxr.events.Start(ctx)
 	<-newIdxr.events.Ready()
 	return newIdxr, nil
+}
+
+func (idxr *MemoryIndexer) Notify() {
+	if idxr.sim != nil {
+		idxr.sim.stateStore.NotifyAll()
+	}
 }
 
 func (idxr *MemoryIndexer) SetSim(sim *MemoryIndexer) {
