@@ -73,7 +73,7 @@ func (rs *Watcher) Stop() {
 }
 
 func (rs *Watcher) Start(ctx context.Context) {
-	rs.log.Info().Msgf("watcher-start")
+	rs.log.Info().Msg("watcher-start")
 	topicQuery := ethereum.FilterQuery{Topics: [][]common.Hash{rs.topic0}}
 	ctx, rs.stop = context.WithCancel(ctx)
 	go rs.watch(ctx, topicQuery)

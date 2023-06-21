@@ -55,7 +55,7 @@ func (rs *StateStore) Fork(ctx context.Context, watcher *eventwatcher.Watcher, b
 			wg.Add(1)
 			rs.wg[blockNumber] = wg
 		}
-		rs.log.Warn().Uint64("block", blockNumber).Msgf("fork-wait")
+		rs.log.Warn().Uint64("block", blockNumber).Msg("fork-wait")
 		rs.Unlock()
 		wg.Wait()
 	}
@@ -101,7 +101,7 @@ func (rs *StateStore) processBlock(ctx context.Context, block *eventwatcher.LogB
 	for _, rawEvent := range block.Logs {
 		if rawEvent.Removed {
 			// FIXME: ignoring reorg
-			rs.log.Warn().Msgf("unhandled reorg", rawEvent)
+			rs.log.Warn().Msgf("unhandled reorg %v", rawEvent)
 			continue
 		}
 		eventABI, err := rs.abi.EventByID(rawEvent.Topics[0])
