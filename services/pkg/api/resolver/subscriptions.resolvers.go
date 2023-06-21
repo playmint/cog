@@ -11,12 +11,12 @@ import (
 	"github.com/playmint/ds-node/pkg/api/model"
 )
 
-func (r *subscriptionResolver) Events(ctx context.Context, gameID string) (<-chan model.Event, error) {
+func (r *subscriptionResolver) Events(ctx context.Context, gameID string, simulated *bool) (<-chan model.Event, error) {
 	game := r.Indexer.GetGame(gameID)
 	if game == nil {
 		return nil, fmt.Errorf("no game found with id %v", gameID)
 	}
-	return r.Subscriptions.SubscribeStateEvent(ctx, game.StateAddress.Hex()), nil
+	return r.Subscriptions.SubscribeStateEvent(ctx, game.StateAddress.Hex(), simulated), nil
 }
 
 func (r *subscriptionResolver) Transaction(ctx context.Context, gameID string, owner *string) (<-chan *model.ActionTransaction, error) {

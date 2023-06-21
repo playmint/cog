@@ -12,7 +12,7 @@ import (
 )
 
 func (r *stateResolver) Block(ctx context.Context, obj *model.State) (int, error) {
-	graph := r.Indexer.GetGraph(common.HexToAddress(obj.ID))
+	graph := r.Indexer.GetGraph(common.HexToAddress(obj.ID), obj.Block, obj.Simulated)
 	if graph == nil {
 		graph = model.NewGraph(0)
 	}
@@ -20,7 +20,7 @@ func (r *stateResolver) Block(ctx context.Context, obj *model.State) (int, error
 }
 
 func (r *stateResolver) Nodes(ctx context.Context, obj *model.State, match *model.Match) ([]*model.Node, error) {
-	graph := r.Indexer.GetGraph(common.HexToAddress(obj.ID))
+	graph := r.Indexer.GetGraph(common.HexToAddress(obj.ID), obj.Block, obj.Simulated)
 	if graph == nil {
 		graph = model.NewGraph(0)
 	}
@@ -28,7 +28,7 @@ func (r *stateResolver) Nodes(ctx context.Context, obj *model.State, match *mode
 }
 
 func (r *stateResolver) Node(ctx context.Context, obj *model.State, match *model.Match) (*model.Node, error) {
-	graph := r.Indexer.GetGraph(common.HexToAddress(obj.ID))
+	graph := r.Indexer.GetGraph(common.HexToAddress(obj.ID), obj.Block, obj.Simulated)
 	if graph == nil {
 		graph = model.NewGraph(0)
 	}

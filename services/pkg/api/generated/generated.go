@@ -38,6 +38,7 @@ type Config struct {
 }
 
 type ResolverRoot interface {
+	Game() GameResolver
 	Mutation() MutationResolver
 	Query() QueryResolver
 	Router() RouterResolver
@@ -76,6 +77,12 @@ type ComplexityRoot struct {
 		Name  func(childComplexity int) int
 		Ref   func(childComplexity int) int
 		Value func(childComplexity int) int
+	}
+
+	BlockEvent struct {
+		Block     func(childComplexity int) int
+		ID        func(childComplexity int) int
+		Simulated func(childComplexity int) int
 	}
 
 	ContractConfig struct {
@@ -122,7 +129,7 @@ type ComplexityRoot struct {
 		ID         func(childComplexity int) int
 		Name       func(childComplexity int) int
 		Router     func(childComplexity int) int
-		State      func(childComplexity int) int
+		State      func(childComplexity int, block *int, simulated *bool) int
 		URL        func(childComplexity int) int
 	}
 
@@ -154,13 +161,6 @@ type ComplexityRoot struct {
 		Games func(childComplexity int) int
 	}
 
-	RemoveEdgeEvent struct {
-		From func(childComplexity int) int
-		ID   func(childComplexity int) int
-		Key  func(childComplexity int) int
-		Rel  func(childComplexity int) int
-	}
-
 	Router struct {
 		ID           func(childComplexity int) int
 		Session      func(childComplexity int, id string) int
@@ -180,34 +180,24 @@ type ComplexityRoot struct {
 		FullAccess func(childComplexity int) int
 	}
 
-	SetAnnotationEvent struct {
-		From func(childComplexity int) int
-		ID   func(childComplexity int) int
-		Name func(childComplexity int) int
-	}
-
-	SetEdgeEvent struct {
-		From func(childComplexity int) int
-		ID   func(childComplexity int) int
-		Key  func(childComplexity int) int
-		Rel  func(childComplexity int) int
-		To   func(childComplexity int) int
-	}
-
 	State struct {
-		Block func(childComplexity int) int
-		ID    func(childComplexity int) int
-		Node  func(childComplexity int, match *model.Match) int
-		Nodes func(childComplexity int, match *model.Match) int
+		Block     func(childComplexity int) int
+		ID        func(childComplexity int) int
+		Node      func(childComplexity int, match *model.Match) int
+		Nodes     func(childComplexity int, match *model.Match) int
+		Simulated func(childComplexity int) int
 	}
 
 	Subscription struct {
-		Events      func(childComplexity int, gameID string) int
+		Events      func(childComplexity int, gameID string, simulated *bool) int
 		Session     func(childComplexity int, gameID string, owner *string) int
 		Transaction func(childComplexity int, gameID string, owner *string) int
 	}
 }
 
+type GameResolver interface {
+	State(ctx context.Context, obj *model.Game, block *int, simulated *bool) (*model.State, error)
+}
 type MutationResolver interface {
 	Signup(ctx context.Context, gameID string, authorization string) (bool, error)
 	Signin(ctx context.Context, gameID string, session string, ttl int, scope string, authorization string) (bool, error)
@@ -226,11 +216,12 @@ type RouterResolver interface {
 }
 type StateResolver interface {
 	Block(ctx context.Context, obj *model.State) (int, error)
+
 	Nodes(ctx context.Context, obj *model.State, match *model.Match) ([]*model.Node, error)
 	Node(ctx context.Context, obj *model.State, match *model.Match) (*model.Node, error)
 }
 type SubscriptionResolver interface {
-	Events(ctx context.Context, gameID string) (<-chan model.Event, error)
+	Events(ctx context.Context, gameID string, simulated *bool) (<-chan model.Event, error)
 	Transaction(ctx context.Context, gameID string, owner *string) (<-chan *model.ActionTransaction, error)
 	Session(ctx context.Context, gameID string, owner *string) (<-chan *model.Session, error)
 }
@@ -368,6 +359,27 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 		}
 
 		return e.complexity.Annotation.Value(childComplexity), true
+
+	case "BlockEvent.block":
+		if e.complexity.BlockEvent.Block == nil {
+			break
+		}
+
+		return e.complexity.BlockEvent.Block(childComplexity), true
+
+	case "BlockEvent.id":
+		if e.complexity.BlockEvent.ID == nil {
+			break
+		}
+
+		return e.complexity.BlockEvent.ID(childComplexity), true
+
+	case "BlockEvent.simulated":
+		if e.complexity.BlockEvent.Simulated == nil {
+			break
+		}
+
+		return e.complexity.BlockEvent.Simulated(childComplexity), true
 
 	case "ContractConfig.address":
 		if e.complexity.ContractConfig.Address == nil {
@@ -570,7 +582,12 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 			break
 		}
 
-		return e.complexity.Game.State(childComplexity), true
+		args, err := ec.field_Game_state_args(context.TODO(), rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Game.State(childComplexity, args["block"].(*int), args["simulated"].(*bool)), true
 
 	case "Game.url":
 		if e.complexity.Game.URL == nil {
@@ -777,34 +794,6 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 
 		return e.complexity.Query.Games(childComplexity), true
 
-	case "RemoveEdgeEvent.from":
-		if e.complexity.RemoveEdgeEvent.From == nil {
-			break
-		}
-
-		return e.complexity.RemoveEdgeEvent.From(childComplexity), true
-
-	case "RemoveEdgeEvent.id":
-		if e.complexity.RemoveEdgeEvent.ID == nil {
-			break
-		}
-
-		return e.complexity.RemoveEdgeEvent.ID(childComplexity), true
-
-	case "RemoveEdgeEvent.key":
-		if e.complexity.RemoveEdgeEvent.Key == nil {
-			break
-		}
-
-		return e.complexity.RemoveEdgeEvent.Key(childComplexity), true
-
-	case "RemoveEdgeEvent.rel":
-		if e.complexity.RemoveEdgeEvent.Rel == nil {
-			break
-		}
-
-		return e.complexity.RemoveEdgeEvent.Rel(childComplexity), true
-
 	case "Router.id":
 		if e.complexity.Router.ID == nil {
 			break
@@ -895,62 +884,6 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 
 		return e.complexity.SessionScope.FullAccess(childComplexity), true
 
-	case "SetAnnotationEvent.from":
-		if e.complexity.SetAnnotationEvent.From == nil {
-			break
-		}
-
-		return e.complexity.SetAnnotationEvent.From(childComplexity), true
-
-	case "SetAnnotationEvent.id":
-		if e.complexity.SetAnnotationEvent.ID == nil {
-			break
-		}
-
-		return e.complexity.SetAnnotationEvent.ID(childComplexity), true
-
-	case "SetAnnotationEvent.name":
-		if e.complexity.SetAnnotationEvent.Name == nil {
-			break
-		}
-
-		return e.complexity.SetAnnotationEvent.Name(childComplexity), true
-
-	case "SetEdgeEvent.from":
-		if e.complexity.SetEdgeEvent.From == nil {
-			break
-		}
-
-		return e.complexity.SetEdgeEvent.From(childComplexity), true
-
-	case "SetEdgeEvent.id":
-		if e.complexity.SetEdgeEvent.ID == nil {
-			break
-		}
-
-		return e.complexity.SetEdgeEvent.ID(childComplexity), true
-
-	case "SetEdgeEvent.key":
-		if e.complexity.SetEdgeEvent.Key == nil {
-			break
-		}
-
-		return e.complexity.SetEdgeEvent.Key(childComplexity), true
-
-	case "SetEdgeEvent.rel":
-		if e.complexity.SetEdgeEvent.Rel == nil {
-			break
-		}
-
-		return e.complexity.SetEdgeEvent.Rel(childComplexity), true
-
-	case "SetEdgeEvent.to":
-		if e.complexity.SetEdgeEvent.To == nil {
-			break
-		}
-
-		return e.complexity.SetEdgeEvent.To(childComplexity), true
-
 	case "State.block":
 		if e.complexity.State.Block == nil {
 			break
@@ -989,6 +922,13 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 
 		return e.complexity.State.Nodes(childComplexity, args["match"].(*model.Match)), true
 
+	case "State.simulated":
+		if e.complexity.State.Simulated == nil {
+			break
+		}
+
+		return e.complexity.State.Simulated(childComplexity), true
+
 	case "Subscription.events":
 		if e.complexity.Subscription.Events == nil {
 			break
@@ -999,7 +939,7 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 			return 0, false
 		}
 
-		return e.complexity.Subscription.Events(childComplexity, args["gameID"].(string)), true
+		return e.complexity.Subscription.Events(childComplexity, args["gameID"].(string), args["simulated"].(*bool)), true
 
 	case "Subscription.session":
 		if e.complexity.Subscription.Session == nil {
@@ -1146,8 +1086,7 @@ type ERC721Metadata {
 }
 
 `, BuiltIn: false},
-	{Name: "schema/game.graphqls", Input: `
-type Dispatcher {
+	{Name: "schema/game.graphqls", Input: `type Dispatcher {
 	id: ID!
 }
 
@@ -1157,10 +1096,9 @@ type Game {
 	url: String!
 
 	dispatcher: Dispatcher!
-	state: State!
+	state(block: Int, simulated: Boolean): State!
 	router: Router!
 }
-
 `, BuiltIn: false},
 	{Name: "schema/mutations.graphqls", Input: `
 type Mutation {
@@ -1316,39 +1254,39 @@ input RelMatch {
 type State {
 	id: ID! # contract address of State
 	block: Int! @goField(forceResolver: true) # block number of last seen update
+	simulated: Boolean!
+	"""
+	nodes returns any nodes that match the Match filter.
+	"""
+	nodes(match: Match): [Node!]! @goField(forceResolver: true)
 
-    """
-    nodes returns any nodes that match the Match filter.
-    """
-	nodes(match: Match): [Node!]! @goField(forceResolver:true)
-
-    """
-    node returns the first node that mates the Match filter.
-    """
-	node(match: Match): Node @goField(forceResolver:true)
+	"""
+	node returns the first node that mates the Match filter.
+	"""
+	node(match: Match): Node @goField(forceResolver: true)
 }
 
 type Node {
-    """
-    the full globally unique id of the node. see ` + "`" + `splitID` + "`" + ` for extracting
-    useful parts from the id.
-    """
-    id: ID!
+	"""
+	the full globally unique id of the node. see ` + "`" + `splitID` + "`" + ` for extracting
+	useful parts from the id.
+	"""
+	id: ID!
 
-    """
-    the full id is made up of 4 bytes of "kind" + 8 bytes of user defined keys.
-    sometimes useful data is stored in the last 8 bytes, like maybe a smaller
-    identifier, or a timestamp, or multiple sub keys. keys extracts these little
-    subkeys from the big id. How many keys are extracted is ditacted by the
-    CompoundKeyKind value set on the state contract during registerNodeType
-    """
-    keys: [BigInt!]!
+	"""
+	the full id is made up of 4 bytes of "kind" + 8 bytes of user defined keys.
+	sometimes useful data is stored in the last 8 bytes, like maybe a smaller
+	identifier, or a timestamp, or multiple sub keys. keys extracts these little
+	subkeys from the big id. How many keys are extracted is ditacted by the
+	CompoundKeyKind value set on the state contract during registerNodeType
+	"""
+	keys: [BigInt!]!
 
-    """
-    ` + "`" + `key` + "`" + ` is the same as ` + "`" + `keys` + "`" + ` but it assumes key is a single large value
+	"""
+	   ` + "`" + `key` + "`" + ` is the same as ` + "`" + `keys` + "`" + ` but it assumes key is a single large value
 	as so is returned as a hex encoded string.
-    """
-    key: BigInt
+	"""
+	key: BigInt
 
 	"""
 	annotations are off-chain data attached to nodes that are guarenteed
@@ -1362,52 +1300,52 @@ type Node {
 	annotations: [Annotation]!
 	annotation(name: String!): Annotation
 
-    """
-    nodes have a "kind" label, it is the human friendly decoding of the first 4
-    bytes of the id. See ` + "`" + `id` + "`" + ` and ` + "`" + `keys` + "`" + `. This value is discovered based on the
-    value set on the state contract via registerNodeType.
-    """
-    kind: String!
+	"""
+	nodes have a "kind" label, it is the human friendly decoding of the first 4
+	bytes of the id. See ` + "`" + `id` + "`" + ` and ` + "`" + `keys` + "`" + `. This value is discovered based on the
+	value set on the state contract via registerNodeType.
+	"""
+	kind: String!
 
-    """
-    fetch the DISTINCT nodes by traversing the graph from this node and applying the match
-    filter.
-    """
-    nodes(match: Match): [Node!]!
+	"""
+	fetch the DISTINCT nodes by traversing the graph from this node and applying the match
+	filter.
+	"""
+	nodes(match: Match): [Node!]!
 
-    """
-    same as ` + "`" + `nodes` + "`" + `, but only returns the first match
-    """
-    node(match: Match): Node
+	"""
+	same as ` + "`" + `nodes` + "`" + `, but only returns the first match
+	"""
+	node(match: Match): Node
 
-    """
-    fetch edges by traversing the graph from this node and applying the match
-    filter.
-    """
-    edges(match: Match): [Edge!]!
+	"""
+	fetch edges by traversing the graph from this node and applying the match
+	filter.
+	"""
+	edges(match: Match): [Edge!]!
 
-    """
-    same as ` + "`" + `edges` + "`" + `, but only returns the first match
-    """
-    edge(match: Match): Edge
+	"""
+	same as ` + "`" + `edges` + "`" + `, but only returns the first match
+	"""
+	edge(match: Match): Edge
 
-    """
-    ` + "`" + `value` + "`" + ` operates exactly as ` + "`" + `edge` + "`" + ` but instead of returning the Edge it
-    returns the weight value of that edge.
-    """
-    value(match: Match): Int
+	"""
+	` + "`" + `value` + "`" + ` operates exactly as ` + "`" + `edge` + "`" + ` but instead of returning the Edge it
+	returns the weight value of that edge.
+	"""
+	value(match: Match): Int
 
-    """
-    ` + "`" + `sum` + "`" + ` operates like ` + "`" + `edges` + "`" + ` but instead of returning the edges, it sums up
-    all the weights of the matched edges.
-    """
-    sum(match: Match): Int!
+	"""
+	` + "`" + `sum` + "`" + ` operates like ` + "`" + `edges` + "`" + ` but instead of returning the edges, it sums up
+	all the weights of the matched edges.
+	"""
+	sum(match: Match): Int!
 
-    """
-    ` + "`" + `count` + "`" + ` operates like ` + "`" + `edges` + "`" + ` but instead of returning the edges, it
-    returns the number of matched edges.
-    """
-    count(match: Match): Int!
+	"""
+	` + "`" + `count` + "`" + ` operates like ` + "`" + `edges` + "`" + ` but instead of returning the edges, it
+	returns the number of matched edges.
+	"""
+	count(match: Match): Int!
 }
 
 """
@@ -1417,58 +1355,58 @@ edges in any direction. Edge represents our position at a node along
 with the edge that we followed.
 """
 type Edge {
-  """
-  edge ids are "virtual" ids that only exist so you can fetch a particular edge
-  in isolation. they are a compound key of DIR+REL+KEY+NODE.ID+PARENT.ID this
-  means that for every "real" edge there are two "virtual" edges with different
-  graphql IDs (one pointing one way, one pointing the other).  this allows for
-  invalidating caches and fetching partial results for edge queries.
-  """
-  id: ID!
+	"""
+	edge ids are "virtual" ids that only exist so you can fetch a particular edge
+	in isolation. they are a compound key of DIR+REL+KEY+NODE.ID+PARENT.ID this
+	means that for every "real" edge there are two "virtual" edges with different
+	graphql IDs (one pointing one way, one pointing the other).  this allows for
+	invalidating caches and fetching partial results for edge queries.
+	"""
+	id: ID!
 
-  """
-  the node on the ` + "`" + `dir` + "`" + ` end of this edge.
-  """
-  node: Node!
+	"""
+	the node on the ` + "`" + `dir` + "`" + ` end of this edge.
+	"""
+	node: Node!
 
-  """
-  the true source end of the edge (unlike ` + "`" + `node` + "`" + ` which is based on current Dir)
-  you probably want ` + "`" + `node` + "`" + ` not this, but sometimes it's useful when dealing
-  with lists of edges
-  """
-  src: Node!
+	"""
+	the true source end of the edge (unlike ` + "`" + `node` + "`" + ` which is based on current Dir)
+	you probably want ` + "`" + `node` + "`" + ` not this, but sometimes it's useful when dealing
+	with lists of edges
+	"""
+	src: Node!
 
-  """
-  the true dest end of the edge (unlike ` + "`" + `node` + "`" + ` which is based on the current
-  Dir) you probably want ` + "`" + `node` + "`" + ` not this, but sometimes it's useful when
-  dealing with lists of edges
-  """
-  dst: Node!
+	"""
+	the true dest end of the edge (unlike ` + "`" + `node` + "`" + ` which is based on the current
+	Dir) you probably want ` + "`" + `node` + "`" + ` not this, but sometimes it's useful when
+	dealing with lists of edges
+	"""
+	dst: Node!
 
-  """
-  ` + "`" + `weight` + "`" + ` is the value stored in the edge
-  """
-  weight: Int!
+	"""
+	` + "`" + `weight` + "`" + ` is the value stored in the edge
+	"""
+	weight: Int!
 
-  """
-  ` + "`" + `key` + "`" + ` is the numeric key that uniquely identifies this edge from other edges
-  of the same ` + "`" + `rel` + "`" + ` type. It is a small uint8 number, but it is not necasarily
-  a sequential index. Many ` + "`" + `rel` + "`" + ` types do not allow for multiple outbound edges
-  of the same type, in which case this will be 0.
-  """
-  key: Int!
+	"""
+	` + "`" + `key` + "`" + ` is the numeric key that uniquely identifies this edge from other edges
+	of the same ` + "`" + `rel` + "`" + ` type. It is a small uint8 number, but it is not necasarily
+	a sequential index. Many ` + "`" + `rel` + "`" + ` types do not allow for multiple outbound edges
+	of the same type, in which case this will be 0.
+	"""
+	key: Int!
 
-  """
-  rel is the human friendly name of the relationship.
-  """
-  rel: String!
+	"""
+	rel is the human friendly name of the relationship.
+	"""
+	rel: String!
 
-  """
-  ` + "`" + `dir` + "`" + ` indicates which "end" of the edge ` + "`" + `node` + "`" + ` is pointing to.
-  If we followed an outbound edge, then ` + "`" + `dir` + "`" + ` would be OUT and ` + "`" + `node` + "`" + ` would be referencing the node at the "destination" end of the edge.
-  If we followed an inbound edge, then ` + "`" + `dir` + "`" + ` would be IN and ` + "`" + `node` + "`" + ` would be referencing the node at the "source" end of the edge.
-  """
-  dir: RelMatchDirection!
+	"""
+	` + "`" + `dir` + "`" + ` indicates which "end" of the edge ` + "`" + `node` + "`" + ` is pointing to.
+	If we followed an outbound edge, then ` + "`" + `dir` + "`" + ` would be OUT and ` + "`" + `node` + "`" + ` would be referencing the node at the "destination" end of the edge.
+	If we followed an inbound edge, then ` + "`" + `dir` + "`" + ` would be IN and ` + "`" + `node` + "`" + ` would be referencing the node at the "source" end of the edge.
+	"""
+	dir: RelMatchDirection!
 }
 
 enum AttributeKind {
@@ -1508,7 +1446,6 @@ enum AttributeKind {
 	STRING_ARRAY
 }
 
-
 """
 annotations are off-chain data attached to nodes that are guarenteed
 to have been made available to all clients, but are not usable within logic.
@@ -1525,39 +1462,21 @@ type Annotation {
 	value: String!
 }
 `, BuiltIn: false},
-	{Name: "schema/subscriptions.graphqls", Input: `
-interface Event {
+	{Name: "schema/subscriptions.graphqls", Input: `interface Event {
 	id: ID!
 }
 
-type SetEdgeEvent implements Event {
+type BlockEvent implements Event {
 	id: ID!
-	from: String!
-	to: String!
-	rel: String!
-	key: Int!
+	block: Int!
+	simulated: Boolean!
 }
-
-type RemoveEdgeEvent implements Event {
-	id: ID!
-	from: String!
-	rel: String!
-	key: Int!
-}
-
-type SetAnnotationEvent implements Event {
-	id: ID!
-	from: String!
-	name: String!
-}
-
 
 type Subscription {
-	events(gameID: ID!): Event!
+	events(gameID: ID!, simulated: Boolean): Event!
 	transaction(gameID: ID!, owner: String): ActionTransaction!
 	session(gameID: ID!, owner: String): Session!
 }
-
 `, BuiltIn: false},
 }
 var parsedSchema = gqlparser.MustLoadSchema(sources...)
@@ -1565,6 +1484,30 @@ var parsedSchema = gqlparser.MustLoadSchema(sources...)
 // endregion ************************** generated!.gotpl **************************
 
 // region    ***************************** args.gotpl *****************************
+
+func (ec *executionContext) field_Game_state_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
+	var err error
+	args := map[string]interface{}{}
+	var arg0 *int
+	if tmp, ok := rawArgs["block"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("block"))
+		arg0, err = ec.unmarshalOInt2ᚖint(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["block"] = arg0
+	var arg1 *bool
+	if tmp, ok := rawArgs["simulated"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("simulated"))
+		arg1, err = ec.unmarshalOBoolean2ᚖbool(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["simulated"] = arg1
+	return args, nil
+}
 
 func (ec *executionContext) field_Mutation_dispatch_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
 	var err error
@@ -1968,6 +1911,15 @@ func (ec *executionContext) field_Subscription_events_args(ctx context.Context, 
 		}
 	}
 	args["gameID"] = arg0
+	var arg1 *bool
+	if tmp, ok := rawArgs["simulated"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("simulated"))
+		arg1, err = ec.unmarshalOBoolean2ᚖbool(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["simulated"] = arg1
 	return args, nil
 }
 
@@ -2644,6 +2596,111 @@ func (ec *executionContext) _Annotation_value(ctx context.Context, field graphql
 	res := resTmp.(string)
 	fc.Result = res
 	return ec.marshalNString2string(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) _BlockEvent_id(ctx context.Context, field graphql.CollectedField, obj *model.BlockEvent) (ret graphql.Marshaler) {
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	fc := &graphql.FieldContext{
+		Object:     "BlockEvent",
+		Field:      field,
+		Args:       nil,
+		IsMethod:   false,
+		IsResolver: false,
+	}
+
+	ctx = graphql.WithFieldContext(ctx, fc)
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.ID, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(string)
+	fc.Result = res
+	return ec.marshalNID2string(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) _BlockEvent_block(ctx context.Context, field graphql.CollectedField, obj *model.BlockEvent) (ret graphql.Marshaler) {
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	fc := &graphql.FieldContext{
+		Object:     "BlockEvent",
+		Field:      field,
+		Args:       nil,
+		IsMethod:   false,
+		IsResolver: false,
+	}
+
+	ctx = graphql.WithFieldContext(ctx, fc)
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Block, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(int)
+	fc.Result = res
+	return ec.marshalNInt2int(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) _BlockEvent_simulated(ctx context.Context, field graphql.CollectedField, obj *model.BlockEvent) (ret graphql.Marshaler) {
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	fc := &graphql.FieldContext{
+		Object:     "BlockEvent",
+		Field:      field,
+		Args:       nil,
+		IsMethod:   false,
+		IsResolver: false,
+	}
+
+	ctx = graphql.WithFieldContext(ctx, fc)
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Simulated, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(bool)
+	fc.Result = res
+	return ec.marshalNBoolean2bool(ctx, field.Selections, res)
 }
 
 func (ec *executionContext) _ContractConfig_name(ctx context.Context, field graphql.CollectedField, obj *model.ContractConfig) (ret graphql.Marshaler) {
@@ -3638,13 +3695,20 @@ func (ec *executionContext) _Game_state(ctx context.Context, field graphql.Colle
 		Field:      field,
 		Args:       nil,
 		IsMethod:   true,
-		IsResolver: false,
+		IsResolver: true,
 	}
 
 	ctx = graphql.WithFieldContext(ctx, fc)
+	rawArgs := field.ArgumentMap(ec.Variables)
+	args, err := ec.field_Game_state_args(ctx, rawArgs)
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	fc.Args = args
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
 		ctx = rctx // use context from middleware stack in children
-		return obj.State(), nil
+		return ec.resolvers.Game().State(rctx, obj, args["block"].(*int), args["simulated"].(*bool))
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -4508,146 +4572,6 @@ func (ec *executionContext) _Query___schema(ctx context.Context, field graphql.C
 	return ec.marshalO__Schema2ᚖgithubᚗcomᚋ99designsᚋgqlgenᚋgraphqlᚋintrospectionᚐSchema(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) _RemoveEdgeEvent_id(ctx context.Context, field graphql.CollectedField, obj *model.RemoveEdgeEvent) (ret graphql.Marshaler) {
-	defer func() {
-		if r := recover(); r != nil {
-			ec.Error(ctx, ec.Recover(ctx, r))
-			ret = graphql.Null
-		}
-	}()
-	fc := &graphql.FieldContext{
-		Object:     "RemoveEdgeEvent",
-		Field:      field,
-		Args:       nil,
-		IsMethod:   false,
-		IsResolver: false,
-	}
-
-	ctx = graphql.WithFieldContext(ctx, fc)
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
-		ctx = rctx // use context from middleware stack in children
-		return obj.ID, nil
-	})
-	if err != nil {
-		ec.Error(ctx, err)
-		return graphql.Null
-	}
-	if resTmp == nil {
-		if !graphql.HasFieldError(ctx, fc) {
-			ec.Errorf(ctx, "must not be null")
-		}
-		return graphql.Null
-	}
-	res := resTmp.(string)
-	fc.Result = res
-	return ec.marshalNID2string(ctx, field.Selections, res)
-}
-
-func (ec *executionContext) _RemoveEdgeEvent_from(ctx context.Context, field graphql.CollectedField, obj *model.RemoveEdgeEvent) (ret graphql.Marshaler) {
-	defer func() {
-		if r := recover(); r != nil {
-			ec.Error(ctx, ec.Recover(ctx, r))
-			ret = graphql.Null
-		}
-	}()
-	fc := &graphql.FieldContext{
-		Object:     "RemoveEdgeEvent",
-		Field:      field,
-		Args:       nil,
-		IsMethod:   false,
-		IsResolver: false,
-	}
-
-	ctx = graphql.WithFieldContext(ctx, fc)
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
-		ctx = rctx // use context from middleware stack in children
-		return obj.From, nil
-	})
-	if err != nil {
-		ec.Error(ctx, err)
-		return graphql.Null
-	}
-	if resTmp == nil {
-		if !graphql.HasFieldError(ctx, fc) {
-			ec.Errorf(ctx, "must not be null")
-		}
-		return graphql.Null
-	}
-	res := resTmp.(string)
-	fc.Result = res
-	return ec.marshalNString2string(ctx, field.Selections, res)
-}
-
-func (ec *executionContext) _RemoveEdgeEvent_rel(ctx context.Context, field graphql.CollectedField, obj *model.RemoveEdgeEvent) (ret graphql.Marshaler) {
-	defer func() {
-		if r := recover(); r != nil {
-			ec.Error(ctx, ec.Recover(ctx, r))
-			ret = graphql.Null
-		}
-	}()
-	fc := &graphql.FieldContext{
-		Object:     "RemoveEdgeEvent",
-		Field:      field,
-		Args:       nil,
-		IsMethod:   false,
-		IsResolver: false,
-	}
-
-	ctx = graphql.WithFieldContext(ctx, fc)
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
-		ctx = rctx // use context from middleware stack in children
-		return obj.Rel, nil
-	})
-	if err != nil {
-		ec.Error(ctx, err)
-		return graphql.Null
-	}
-	if resTmp == nil {
-		if !graphql.HasFieldError(ctx, fc) {
-			ec.Errorf(ctx, "must not be null")
-		}
-		return graphql.Null
-	}
-	res := resTmp.(string)
-	fc.Result = res
-	return ec.marshalNString2string(ctx, field.Selections, res)
-}
-
-func (ec *executionContext) _RemoveEdgeEvent_key(ctx context.Context, field graphql.CollectedField, obj *model.RemoveEdgeEvent) (ret graphql.Marshaler) {
-	defer func() {
-		if r := recover(); r != nil {
-			ec.Error(ctx, ec.Recover(ctx, r))
-			ret = graphql.Null
-		}
-	}()
-	fc := &graphql.FieldContext{
-		Object:     "RemoveEdgeEvent",
-		Field:      field,
-		Args:       nil,
-		IsMethod:   false,
-		IsResolver: false,
-	}
-
-	ctx = graphql.WithFieldContext(ctx, fc)
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
-		ctx = rctx // use context from middleware stack in children
-		return obj.Key, nil
-	})
-	if err != nil {
-		ec.Error(ctx, err)
-		return graphql.Null
-	}
-	if resTmp == nil {
-		if !graphql.HasFieldError(ctx, fc) {
-			ec.Errorf(ctx, "must not be null")
-		}
-		return graphql.Null
-	}
-	res := resTmp.(int)
-	fc.Result = res
-	return ec.marshalNInt2int(ctx, field.Selections, res)
-}
-
 func (ec *executionContext) _Router_id(ctx context.Context, field graphql.CollectedField, obj *model.Router) (ret graphql.Marshaler) {
 	defer func() {
 		if r := recover(); r != nil {
@@ -5020,286 +4944,6 @@ func (ec *executionContext) _SessionScope_FullAccess(ctx context.Context, field 
 	return ec.marshalNBoolean2bool(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) _SetAnnotationEvent_id(ctx context.Context, field graphql.CollectedField, obj *model.SetAnnotationEvent) (ret graphql.Marshaler) {
-	defer func() {
-		if r := recover(); r != nil {
-			ec.Error(ctx, ec.Recover(ctx, r))
-			ret = graphql.Null
-		}
-	}()
-	fc := &graphql.FieldContext{
-		Object:     "SetAnnotationEvent",
-		Field:      field,
-		Args:       nil,
-		IsMethod:   false,
-		IsResolver: false,
-	}
-
-	ctx = graphql.WithFieldContext(ctx, fc)
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
-		ctx = rctx // use context from middleware stack in children
-		return obj.ID, nil
-	})
-	if err != nil {
-		ec.Error(ctx, err)
-		return graphql.Null
-	}
-	if resTmp == nil {
-		if !graphql.HasFieldError(ctx, fc) {
-			ec.Errorf(ctx, "must not be null")
-		}
-		return graphql.Null
-	}
-	res := resTmp.(string)
-	fc.Result = res
-	return ec.marshalNID2string(ctx, field.Selections, res)
-}
-
-func (ec *executionContext) _SetAnnotationEvent_from(ctx context.Context, field graphql.CollectedField, obj *model.SetAnnotationEvent) (ret graphql.Marshaler) {
-	defer func() {
-		if r := recover(); r != nil {
-			ec.Error(ctx, ec.Recover(ctx, r))
-			ret = graphql.Null
-		}
-	}()
-	fc := &graphql.FieldContext{
-		Object:     "SetAnnotationEvent",
-		Field:      field,
-		Args:       nil,
-		IsMethod:   false,
-		IsResolver: false,
-	}
-
-	ctx = graphql.WithFieldContext(ctx, fc)
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
-		ctx = rctx // use context from middleware stack in children
-		return obj.From, nil
-	})
-	if err != nil {
-		ec.Error(ctx, err)
-		return graphql.Null
-	}
-	if resTmp == nil {
-		if !graphql.HasFieldError(ctx, fc) {
-			ec.Errorf(ctx, "must not be null")
-		}
-		return graphql.Null
-	}
-	res := resTmp.(string)
-	fc.Result = res
-	return ec.marshalNString2string(ctx, field.Selections, res)
-}
-
-func (ec *executionContext) _SetAnnotationEvent_name(ctx context.Context, field graphql.CollectedField, obj *model.SetAnnotationEvent) (ret graphql.Marshaler) {
-	defer func() {
-		if r := recover(); r != nil {
-			ec.Error(ctx, ec.Recover(ctx, r))
-			ret = graphql.Null
-		}
-	}()
-	fc := &graphql.FieldContext{
-		Object:     "SetAnnotationEvent",
-		Field:      field,
-		Args:       nil,
-		IsMethod:   false,
-		IsResolver: false,
-	}
-
-	ctx = graphql.WithFieldContext(ctx, fc)
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
-		ctx = rctx // use context from middleware stack in children
-		return obj.Name, nil
-	})
-	if err != nil {
-		ec.Error(ctx, err)
-		return graphql.Null
-	}
-	if resTmp == nil {
-		if !graphql.HasFieldError(ctx, fc) {
-			ec.Errorf(ctx, "must not be null")
-		}
-		return graphql.Null
-	}
-	res := resTmp.(string)
-	fc.Result = res
-	return ec.marshalNString2string(ctx, field.Selections, res)
-}
-
-func (ec *executionContext) _SetEdgeEvent_id(ctx context.Context, field graphql.CollectedField, obj *model.SetEdgeEvent) (ret graphql.Marshaler) {
-	defer func() {
-		if r := recover(); r != nil {
-			ec.Error(ctx, ec.Recover(ctx, r))
-			ret = graphql.Null
-		}
-	}()
-	fc := &graphql.FieldContext{
-		Object:     "SetEdgeEvent",
-		Field:      field,
-		Args:       nil,
-		IsMethod:   false,
-		IsResolver: false,
-	}
-
-	ctx = graphql.WithFieldContext(ctx, fc)
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
-		ctx = rctx // use context from middleware stack in children
-		return obj.ID, nil
-	})
-	if err != nil {
-		ec.Error(ctx, err)
-		return graphql.Null
-	}
-	if resTmp == nil {
-		if !graphql.HasFieldError(ctx, fc) {
-			ec.Errorf(ctx, "must not be null")
-		}
-		return graphql.Null
-	}
-	res := resTmp.(string)
-	fc.Result = res
-	return ec.marshalNID2string(ctx, field.Selections, res)
-}
-
-func (ec *executionContext) _SetEdgeEvent_from(ctx context.Context, field graphql.CollectedField, obj *model.SetEdgeEvent) (ret graphql.Marshaler) {
-	defer func() {
-		if r := recover(); r != nil {
-			ec.Error(ctx, ec.Recover(ctx, r))
-			ret = graphql.Null
-		}
-	}()
-	fc := &graphql.FieldContext{
-		Object:     "SetEdgeEvent",
-		Field:      field,
-		Args:       nil,
-		IsMethod:   false,
-		IsResolver: false,
-	}
-
-	ctx = graphql.WithFieldContext(ctx, fc)
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
-		ctx = rctx // use context from middleware stack in children
-		return obj.From, nil
-	})
-	if err != nil {
-		ec.Error(ctx, err)
-		return graphql.Null
-	}
-	if resTmp == nil {
-		if !graphql.HasFieldError(ctx, fc) {
-			ec.Errorf(ctx, "must not be null")
-		}
-		return graphql.Null
-	}
-	res := resTmp.(string)
-	fc.Result = res
-	return ec.marshalNString2string(ctx, field.Selections, res)
-}
-
-func (ec *executionContext) _SetEdgeEvent_to(ctx context.Context, field graphql.CollectedField, obj *model.SetEdgeEvent) (ret graphql.Marshaler) {
-	defer func() {
-		if r := recover(); r != nil {
-			ec.Error(ctx, ec.Recover(ctx, r))
-			ret = graphql.Null
-		}
-	}()
-	fc := &graphql.FieldContext{
-		Object:     "SetEdgeEvent",
-		Field:      field,
-		Args:       nil,
-		IsMethod:   false,
-		IsResolver: false,
-	}
-
-	ctx = graphql.WithFieldContext(ctx, fc)
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
-		ctx = rctx // use context from middleware stack in children
-		return obj.To, nil
-	})
-	if err != nil {
-		ec.Error(ctx, err)
-		return graphql.Null
-	}
-	if resTmp == nil {
-		if !graphql.HasFieldError(ctx, fc) {
-			ec.Errorf(ctx, "must not be null")
-		}
-		return graphql.Null
-	}
-	res := resTmp.(string)
-	fc.Result = res
-	return ec.marshalNString2string(ctx, field.Selections, res)
-}
-
-func (ec *executionContext) _SetEdgeEvent_rel(ctx context.Context, field graphql.CollectedField, obj *model.SetEdgeEvent) (ret graphql.Marshaler) {
-	defer func() {
-		if r := recover(); r != nil {
-			ec.Error(ctx, ec.Recover(ctx, r))
-			ret = graphql.Null
-		}
-	}()
-	fc := &graphql.FieldContext{
-		Object:     "SetEdgeEvent",
-		Field:      field,
-		Args:       nil,
-		IsMethod:   false,
-		IsResolver: false,
-	}
-
-	ctx = graphql.WithFieldContext(ctx, fc)
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
-		ctx = rctx // use context from middleware stack in children
-		return obj.Rel, nil
-	})
-	if err != nil {
-		ec.Error(ctx, err)
-		return graphql.Null
-	}
-	if resTmp == nil {
-		if !graphql.HasFieldError(ctx, fc) {
-			ec.Errorf(ctx, "must not be null")
-		}
-		return graphql.Null
-	}
-	res := resTmp.(string)
-	fc.Result = res
-	return ec.marshalNString2string(ctx, field.Selections, res)
-}
-
-func (ec *executionContext) _SetEdgeEvent_key(ctx context.Context, field graphql.CollectedField, obj *model.SetEdgeEvent) (ret graphql.Marshaler) {
-	defer func() {
-		if r := recover(); r != nil {
-			ec.Error(ctx, ec.Recover(ctx, r))
-			ret = graphql.Null
-		}
-	}()
-	fc := &graphql.FieldContext{
-		Object:     "SetEdgeEvent",
-		Field:      field,
-		Args:       nil,
-		IsMethod:   false,
-		IsResolver: false,
-	}
-
-	ctx = graphql.WithFieldContext(ctx, fc)
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
-		ctx = rctx // use context from middleware stack in children
-		return obj.Key, nil
-	})
-	if err != nil {
-		ec.Error(ctx, err)
-		return graphql.Null
-	}
-	if resTmp == nil {
-		if !graphql.HasFieldError(ctx, fc) {
-			ec.Errorf(ctx, "must not be null")
-		}
-		return graphql.Null
-	}
-	res := resTmp.(int)
-	fc.Result = res
-	return ec.marshalNInt2int(ctx, field.Selections, res)
-}
-
 func (ec *executionContext) _State_id(ctx context.Context, field graphql.CollectedField, obj *model.State) (ret graphql.Marshaler) {
 	defer func() {
 		if r := recover(); r != nil {
@@ -5368,6 +5012,41 @@ func (ec *executionContext) _State_block(ctx context.Context, field graphql.Coll
 	res := resTmp.(int)
 	fc.Result = res
 	return ec.marshalNInt2int(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) _State_simulated(ctx context.Context, field graphql.CollectedField, obj *model.State) (ret graphql.Marshaler) {
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	fc := &graphql.FieldContext{
+		Object:     "State",
+		Field:      field,
+		Args:       nil,
+		IsMethod:   false,
+		IsResolver: false,
+	}
+
+	ctx = graphql.WithFieldContext(ctx, fc)
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Simulated, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(bool)
+	fc.Result = res
+	return ec.marshalNBoolean2bool(ctx, field.Selections, res)
 }
 
 func (ec *executionContext) _State_nodes(ctx context.Context, field graphql.CollectedField, obj *model.State) (ret graphql.Marshaler) {
@@ -5476,7 +5155,7 @@ func (ec *executionContext) _Subscription_events(ctx context.Context, field grap
 	fc.Args = args
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
 		ctx = rctx // use context from middleware stack in children
-		return ec.resolvers.Subscription().Events(rctx, args["gameID"].(string))
+		return ec.resolvers.Subscription().Events(rctx, args["gameID"].(string), args["simulated"].(*bool))
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -6903,27 +6582,13 @@ func (ec *executionContext) _Event(ctx context.Context, sel ast.SelectionSet, ob
 	switch obj := (obj).(type) {
 	case nil:
 		return graphql.Null
-	case model.SetEdgeEvent:
-		return ec._SetEdgeEvent(ctx, sel, &obj)
-	case *model.SetEdgeEvent:
+	case model.BlockEvent:
+		return ec._BlockEvent(ctx, sel, &obj)
+	case *model.BlockEvent:
 		if obj == nil {
 			return graphql.Null
 		}
-		return ec._SetEdgeEvent(ctx, sel, obj)
-	case model.RemoveEdgeEvent:
-		return ec._RemoveEdgeEvent(ctx, sel, &obj)
-	case *model.RemoveEdgeEvent:
-		if obj == nil {
-			return graphql.Null
-		}
-		return ec._RemoveEdgeEvent(ctx, sel, obj)
-	case model.SetAnnotationEvent:
-		return ec._SetAnnotationEvent(ctx, sel, &obj)
-	case *model.SetAnnotationEvent:
-		if obj == nil {
-			return graphql.Null
-		}
-		return ec._SetAnnotationEvent(ctx, sel, obj)
+		return ec._BlockEvent(ctx, sel, obj)
 	default:
 		panic(fmt.Errorf("unexpected type %T", obj))
 	}
@@ -7163,6 +6828,57 @@ func (ec *executionContext) _Annotation(ctx context.Context, sel ast.SelectionSe
 		case "value":
 			innerFunc := func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Annotation_value(ctx, field, obj)
+			}
+
+			out.Values[i] = innerFunc(ctx)
+
+			if out.Values[i] == graphql.Null {
+				invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch()
+	if invalids > 0 {
+		return graphql.Null
+	}
+	return out
+}
+
+var blockEventImplementors = []string{"BlockEvent", "Event"}
+
+func (ec *executionContext) _BlockEvent(ctx context.Context, sel ast.SelectionSet, obj *model.BlockEvent) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, blockEventImplementors)
+	out := graphql.NewFieldSet(fields)
+	var invalids uint32
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("BlockEvent")
+		case "id":
+			innerFunc := func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._BlockEvent_id(ctx, field, obj)
+			}
+
+			out.Values[i] = innerFunc(ctx)
+
+			if out.Values[i] == graphql.Null {
+				invalids++
+			}
+		case "block":
+			innerFunc := func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._BlockEvent_block(ctx, field, obj)
+			}
+
+			out.Values[i] = innerFunc(ctx)
+
+			if out.Values[i] == graphql.Null {
+				invalids++
+			}
+		case "simulated":
+			innerFunc := func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._BlockEvent_simulated(ctx, field, obj)
 			}
 
 			out.Values[i] = innerFunc(ctx)
@@ -7544,7 +7260,7 @@ func (ec *executionContext) _Game(ctx context.Context, sel ast.SelectionSet, obj
 			out.Values[i] = innerFunc(ctx)
 
 			if out.Values[i] == graphql.Null {
-				invalids++
+				atomic.AddUint32(&invalids, 1)
 			}
 		case "name":
 			innerFunc := func(ctx context.Context) (res graphql.Marshaler) {
@@ -7554,7 +7270,7 @@ func (ec *executionContext) _Game(ctx context.Context, sel ast.SelectionSet, obj
 			out.Values[i] = innerFunc(ctx)
 
 			if out.Values[i] == graphql.Null {
-				invalids++
+				atomic.AddUint32(&invalids, 1)
 			}
 		case "url":
 			innerFunc := func(ctx context.Context) (res graphql.Marshaler) {
@@ -7564,7 +7280,7 @@ func (ec *executionContext) _Game(ctx context.Context, sel ast.SelectionSet, obj
 			out.Values[i] = innerFunc(ctx)
 
 			if out.Values[i] == graphql.Null {
-				invalids++
+				atomic.AddUint32(&invalids, 1)
 			}
 		case "dispatcher":
 			innerFunc := func(ctx context.Context) (res graphql.Marshaler) {
@@ -7574,18 +7290,28 @@ func (ec *executionContext) _Game(ctx context.Context, sel ast.SelectionSet, obj
 			out.Values[i] = innerFunc(ctx)
 
 			if out.Values[i] == graphql.Null {
-				invalids++
+				atomic.AddUint32(&invalids, 1)
 			}
 		case "state":
+			field := field
+
 			innerFunc := func(ctx context.Context) (res graphql.Marshaler) {
-				return ec._Game_state(ctx, field, obj)
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Game_state(ctx, field, obj)
+				if res == graphql.Null {
+					atomic.AddUint32(&invalids, 1)
+				}
+				return res
 			}
 
-			out.Values[i] = innerFunc(ctx)
+			out.Concurrently(i, func() graphql.Marshaler {
+				return innerFunc(ctx)
 
-			if out.Values[i] == graphql.Null {
-				invalids++
-			}
+			})
 		case "router":
 			innerFunc := func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Game_router(ctx, field, obj)
@@ -7594,7 +7320,7 @@ func (ec *executionContext) _Game(ctx context.Context, sel ast.SelectionSet, obj
 			out.Values[i] = innerFunc(ctx)
 
 			if out.Values[i] == graphql.Null {
-				invalids++
+				atomic.AddUint32(&invalids, 1)
 			}
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
@@ -7903,67 +7629,6 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 	return out
 }
 
-var removeEdgeEventImplementors = []string{"RemoveEdgeEvent", "Event"}
-
-func (ec *executionContext) _RemoveEdgeEvent(ctx context.Context, sel ast.SelectionSet, obj *model.RemoveEdgeEvent) graphql.Marshaler {
-	fields := graphql.CollectFields(ec.OperationContext, sel, removeEdgeEventImplementors)
-	out := graphql.NewFieldSet(fields)
-	var invalids uint32
-	for i, field := range fields {
-		switch field.Name {
-		case "__typename":
-			out.Values[i] = graphql.MarshalString("RemoveEdgeEvent")
-		case "id":
-			innerFunc := func(ctx context.Context) (res graphql.Marshaler) {
-				return ec._RemoveEdgeEvent_id(ctx, field, obj)
-			}
-
-			out.Values[i] = innerFunc(ctx)
-
-			if out.Values[i] == graphql.Null {
-				invalids++
-			}
-		case "from":
-			innerFunc := func(ctx context.Context) (res graphql.Marshaler) {
-				return ec._RemoveEdgeEvent_from(ctx, field, obj)
-			}
-
-			out.Values[i] = innerFunc(ctx)
-
-			if out.Values[i] == graphql.Null {
-				invalids++
-			}
-		case "rel":
-			innerFunc := func(ctx context.Context) (res graphql.Marshaler) {
-				return ec._RemoveEdgeEvent_rel(ctx, field, obj)
-			}
-
-			out.Values[i] = innerFunc(ctx)
-
-			if out.Values[i] == graphql.Null {
-				invalids++
-			}
-		case "key":
-			innerFunc := func(ctx context.Context) (res graphql.Marshaler) {
-				return ec._RemoveEdgeEvent_key(ctx, field, obj)
-			}
-
-			out.Values[i] = innerFunc(ctx)
-
-			if out.Values[i] == graphql.Null {
-				invalids++
-			}
-		default:
-			panic("unknown field " + strconv.Quote(field.Name))
-		}
-	}
-	out.Dispatch()
-	if invalids > 0 {
-		return graphql.Null
-	}
-	return out
-}
-
 var routerImplementors = []string{"Router"}
 
 func (ec *executionContext) _Router(ctx context.Context, sel ast.SelectionSet, obj *model.Router) graphql.Marshaler {
@@ -8161,128 +7826,6 @@ func (ec *executionContext) _SessionScope(ctx context.Context, sel ast.Selection
 	return out
 }
 
-var setAnnotationEventImplementors = []string{"SetAnnotationEvent", "Event"}
-
-func (ec *executionContext) _SetAnnotationEvent(ctx context.Context, sel ast.SelectionSet, obj *model.SetAnnotationEvent) graphql.Marshaler {
-	fields := graphql.CollectFields(ec.OperationContext, sel, setAnnotationEventImplementors)
-	out := graphql.NewFieldSet(fields)
-	var invalids uint32
-	for i, field := range fields {
-		switch field.Name {
-		case "__typename":
-			out.Values[i] = graphql.MarshalString("SetAnnotationEvent")
-		case "id":
-			innerFunc := func(ctx context.Context) (res graphql.Marshaler) {
-				return ec._SetAnnotationEvent_id(ctx, field, obj)
-			}
-
-			out.Values[i] = innerFunc(ctx)
-
-			if out.Values[i] == graphql.Null {
-				invalids++
-			}
-		case "from":
-			innerFunc := func(ctx context.Context) (res graphql.Marshaler) {
-				return ec._SetAnnotationEvent_from(ctx, field, obj)
-			}
-
-			out.Values[i] = innerFunc(ctx)
-
-			if out.Values[i] == graphql.Null {
-				invalids++
-			}
-		case "name":
-			innerFunc := func(ctx context.Context) (res graphql.Marshaler) {
-				return ec._SetAnnotationEvent_name(ctx, field, obj)
-			}
-
-			out.Values[i] = innerFunc(ctx)
-
-			if out.Values[i] == graphql.Null {
-				invalids++
-			}
-		default:
-			panic("unknown field " + strconv.Quote(field.Name))
-		}
-	}
-	out.Dispatch()
-	if invalids > 0 {
-		return graphql.Null
-	}
-	return out
-}
-
-var setEdgeEventImplementors = []string{"SetEdgeEvent", "Event"}
-
-func (ec *executionContext) _SetEdgeEvent(ctx context.Context, sel ast.SelectionSet, obj *model.SetEdgeEvent) graphql.Marshaler {
-	fields := graphql.CollectFields(ec.OperationContext, sel, setEdgeEventImplementors)
-	out := graphql.NewFieldSet(fields)
-	var invalids uint32
-	for i, field := range fields {
-		switch field.Name {
-		case "__typename":
-			out.Values[i] = graphql.MarshalString("SetEdgeEvent")
-		case "id":
-			innerFunc := func(ctx context.Context) (res graphql.Marshaler) {
-				return ec._SetEdgeEvent_id(ctx, field, obj)
-			}
-
-			out.Values[i] = innerFunc(ctx)
-
-			if out.Values[i] == graphql.Null {
-				invalids++
-			}
-		case "from":
-			innerFunc := func(ctx context.Context) (res graphql.Marshaler) {
-				return ec._SetEdgeEvent_from(ctx, field, obj)
-			}
-
-			out.Values[i] = innerFunc(ctx)
-
-			if out.Values[i] == graphql.Null {
-				invalids++
-			}
-		case "to":
-			innerFunc := func(ctx context.Context) (res graphql.Marshaler) {
-				return ec._SetEdgeEvent_to(ctx, field, obj)
-			}
-
-			out.Values[i] = innerFunc(ctx)
-
-			if out.Values[i] == graphql.Null {
-				invalids++
-			}
-		case "rel":
-			innerFunc := func(ctx context.Context) (res graphql.Marshaler) {
-				return ec._SetEdgeEvent_rel(ctx, field, obj)
-			}
-
-			out.Values[i] = innerFunc(ctx)
-
-			if out.Values[i] == graphql.Null {
-				invalids++
-			}
-		case "key":
-			innerFunc := func(ctx context.Context) (res graphql.Marshaler) {
-				return ec._SetEdgeEvent_key(ctx, field, obj)
-			}
-
-			out.Values[i] = innerFunc(ctx)
-
-			if out.Values[i] == graphql.Null {
-				invalids++
-			}
-		default:
-			panic("unknown field " + strconv.Quote(field.Name))
-		}
-	}
-	out.Dispatch()
-	if invalids > 0 {
-		return graphql.Null
-	}
-	return out
-}
-
 var stateImplementors = []string{"State"}
 
 func (ec *executionContext) _State(ctx context.Context, sel ast.SelectionSet, obj *model.State) graphql.Marshaler {
@@ -8323,6 +7866,16 @@ func (ec *executionContext) _State(ctx context.Context, sel ast.SelectionSet, ob
 				return innerFunc(ctx)
 
 			})
+		case "simulated":
+			innerFunc := func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._State_simulated(ctx, field, obj)
+			}
+
+			out.Values[i] = innerFunc(ctx)
+
+			if out.Values[i] == graphql.Null {
+				atomic.AddUint32(&invalids, 1)
+			}
 		case "nodes":
 			field := field
 
@@ -9363,6 +8916,10 @@ func (ec *executionContext) marshalNSessionScope2ᚖgithubᚗcomᚋplaymintᚋds
 		return graphql.Null
 	}
 	return ec._SessionScope(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNState2githubᚗcomᚋplaymintᚋdsᚑnodeᚋpkgᚋapiᚋmodelᚐState(ctx context.Context, sel ast.SelectionSet, v model.State) graphql.Marshaler {
+	return ec._State(ctx, sel, &v)
 }
 
 func (ec *executionContext) marshalNState2ᚖgithubᚗcomᚋplaymintᚋdsᚑnodeᚋpkgᚋapiᚋmodelᚐState(ctx context.Context, sel ast.SelectionSet, v *model.State) graphql.Marshaler {

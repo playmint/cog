@@ -39,13 +39,21 @@ func Main(ctx context.Context) error {
 	go subscriptions.Listen(ctx)
 
 	// start an indexer
-	idxr, err := indexer.NewMemoryIndexer(ctx, notifications)
+	idxr, err := indexer.NewMemoryIndexer(ctx, notifications, config.IndexerProviderHTTP, config.IndexerProviderWS)
 	if err != nil {
 		return err
 	}
 
 	// start a sequencer
-	seqr, err := sequencer.NewMemorySequencer(ctx, config.SequencerPrivateKey, notifications)
+	seqr, err := sequencer.NewMemorySequencer(
+		ctx,
+		config.SequencerPrivateKey,
+		notifications,
+		config.SequencerProviderHTTP,
+		config.SimulationProviderHTTP,
+		config.SimulationProviderWS,
+		idxr,
+	)
 	if err != nil {
 		return err
 	}
@@ -55,6 +63,9 @@ func Main(ctx context.Context) error {
 	log.Info().Str("service", "indexer").Msg("ready")
 	<-seqr.Ready()
 	log.Info().Str("service", "sequencer").Msg("ready")
+
+	// start broadcasting notifications
+	idxr.SetNotificationsEnabled(true, false)
 
 	// start graphql api server
 	api := api.Server{

@@ -32,8 +32,13 @@ type StateEvent struct {
 	Event   Event
 }
 
+type StateEventSubscription struct {
+	Channel   chan Event
+	Simulated *bool
+}
+
 type Subscriptions struct {
-	Events         map[string]map[uuid.UUID]chan Event
+	Events         map[string]map[uuid.UUID]StateEventSubscription
 	TxByOwner      map[string]map[string]map[uuid.UUID]chan *ActionTransaction
 	SessionByOwner map[string]map[string]map[uuid.UUID]chan *Session
 	notifications  chan interface{}
@@ -43,7 +48,7 @@ type Subscriptions struct {
 func NewSubscriptions() (*Subscriptions, chan interface{}) {
 	notifications := make(chan interface{}, NotificationBuffer)
 	return &Subscriptions{
-		Events:        map[string]map[uuid.UUID]chan Event{},
+		Events:        map[string]map[uuid.UUID]StateEventSubscription{},
 		TxByOwner:     map[string]map[string]map[uuid.UUID]chan *ActionTransaction{},
 		notifications: notifications,
 	}, notifications
@@ -56,17 +61,14 @@ func (subs *Subscriptions) Listen(ctx context.Context) {
 			return
 		case notification := <-subs.notifications:
 			switch obj := notification.(type) {
-			case *StateEvent:
-				for stateID, subs := range subs.Events {
-					if stateID != obj.StateID {
-						continue
-					}
-					if obj.Event == nil {
-						continue
-					}
+			case *BlockEvent:
+				for _, subs := range subs.Events {
 					for _, subscriber := range subs {
+						if subscriber.Simulated != nil && *subscriber.Simulated != obj.Simulated {
+							continue
+						}
 						select {
-						case subscriber <- obj.Event:
+						case subscriber.Channel <- obj:
 						default:
 						}
 					}
@@ -111,7 +113,7 @@ func (subs *Subscriptions) Listen(ctx context.Context) {
 	}
 }
 
-func (subs *Subscriptions) SubscribeStateEvent(ctx context.Context, stateID string) chan Event {
+func (subs *Subscriptions) SubscribeStateEvent(ctx context.Context, stateID string, simulated *bool) chan Event {
 	id := uuid.New()
 
 	go func() {
@@ -128,10 +130,13 @@ func (subs *Subscriptions) SubscribeStateEvent(ctx context.Context, stateID stri
 	subs.Lock()
 	chans, ok := subs.Events[stateID]
 	if !ok {
-		chans = map[uuid.UUID]chan Event{}
+		chans = map[uuid.UUID]StateEventSubscription{}
 	}
 	events := make(chan Event, SubscriptionBuffer)
-	chans[id] = events
+	chans[id] = StateEventSubscription{
+		Channel:   events,
+		Simulated: simulated,
+	}
 	subs.Events[stateID] = chans
 	subs.Unlock()
 

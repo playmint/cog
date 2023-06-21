@@ -4,15 +4,11 @@ import (
 	"context"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/benbjohnson/immutable"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/playmint/ds-node/pkg/api/model"
-	"github.com/playmint/ds-node/pkg/client"
-	"github.com/playmint/ds-node/pkg/client/alchemy"
 	"github.com/playmint/ds-node/pkg/contracts/router"
 	"github.com/playmint/ds-node/pkg/indexer/eventwatcher"
 	"github.com/rs/zerolog"
@@ -22,27 +18,23 @@ import (
 var FULL_ACCESS uint32 = 0xffffffff
 
 type SessionStore struct {
-	sessions      *immutable.Map[string, *immutable.Map[string, *model.Session]]
-	abi           *abi.ABI
-	events        *eventwatcher.Watcher
-	client        *alchemy.Client
-	notifications chan interface{}
-	log           zerolog.Logger
+	sessions *immutable.Map[string, *immutable.Map[string, *model.Session]]
+	abi      *abi.ABI
+	events   *eventwatcher.Watcher
+	log      zerolog.Logger
 	sync.RWMutex
 }
 
-func NewSessionStore(ctx context.Context, client *alchemy.Client, watcher *eventwatcher.Watcher, notifications chan interface{}) (*SessionStore, error) {
+func NewSessionStore(ctx context.Context, watcher *eventwatcher.Watcher) (*SessionStore, error) {
 	cabi, err := abi.JSON(strings.NewReader(router.SessionRouterABI))
 	if err != nil {
 		return nil, err
 	}
 	store := &SessionStore{
-		client:        client,
-		abi:           &cabi,
-		events:        watcher,
-		notifications: notifications,
-		sessions:      immutable.NewMap[string, *immutable.Map[string, *model.Session]](nil),
-		log:           log.With().Str("service", "indexer").Str("component", "sessionstore").Logger(),
+		abi:      &cabi,
+		events:   watcher,
+		sessions: immutable.NewMap[string, *immutable.Map[string, *model.Session]](nil),
+		log:      log.With().Str("service", "indexer").Str("component", "sessionstore").Logger(),
 	}
 
 	// watch all events from all contracts that match the SessionCreate topic
@@ -57,39 +49,34 @@ func NewSessionStore(ctx context.Context, client *alchemy.Client, watcher *event
 	return store, nil
 }
 
-func (rs *SessionStore) emitSession(s *model.Session) {
-	rs.notifications <- s
-}
-
-func (rs *SessionStore) watch(ctx context.Context, events chan types.Log) {
+func (rs *SessionStore) watch(ctx context.Context, blocks chan *eventwatcher.LogBatch) {
 	for {
 		select {
 		case <-ctx.Done():
 			return
-		case rawEvent := <-events:
-			eventABI, err := rs.abi.EventByID(rawEvent.Topics[0])
-			if err != nil {
-				rs.log.Warn().Err(err).Msg("unhandleable event topic")
-				continue
-			}
-			rs.log.Debug().Msgf("recv %v", eventABI.RawName)
-			switch eventABI.RawName {
-			case "SessionCreate":
-				var evt router.SessionRouterSessionCreate
-				if err := unpackLog(rs.abi, &evt, eventABI.RawName, rawEvent); err != nil {
-					rs.log.Warn().Err(err).Msgf("undecodable %T event", evt)
+		case block := <-blocks:
+			for _, rawEvent := range block.Logs {
+				eventABI, err := rs.abi.EventByID(rawEvent.Topics[0])
+				if err != nil {
+					rs.log.Debug().Msgf("unhandleable event topic: %v", err)
 					continue
 				}
-				evt.Raw = rawEvent
-				err := rs.setSession(&evt)
-				if err != nil && client.IsRetryable(err) {
-					time.Sleep(1 * time.Second)
-					events <- rawEvent
-				} else if err != nil {
-					rs.log.Error().Err(err).Msgf("failed process %T event", evt)
+				rs.log.Debug().Msgf("recv %v", eventABI.RawName)
+				switch eventABI.RawName {
+				case "SessionCreate":
+					var evt router.SessionRouterSessionCreate
+					if err := unpackLog(rs.abi, &evt, eventABI.RawName, rawEvent); err != nil {
+						rs.log.Warn().Err(err).Msgf("undecodable %T event", evt)
+						continue
+					}
+					evt.Raw = rawEvent
+					err := rs.setSession(&evt)
+					if err != nil {
+						rs.log.Error().Err(err).Msgf("failed process %T event", evt)
+					}
+				default:
+					rs.log.Warn().Msgf("ignoring unhandled event type %v", eventABI)
 				}
-			default:
-				rs.log.Warn().Msgf("ignoring unhandled event type %v", eventABI)
 			}
 		}
 	}
@@ -126,8 +113,6 @@ func (rs *SessionStore) setSession(evt *router.SessionRouterSessionCreate) error
 	// add to the set
 	sessions = sessions.Set(evt.Session.Hex(), session)
 	rs.sessions = rs.sessions.Set(evt.Raw.Address.Hex(), sessions)
-
-	rs.emitSession(session)
 
 	return nil
 }

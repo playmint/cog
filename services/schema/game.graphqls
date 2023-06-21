@@ -1,4 +1,3 @@
-
 type Dispatcher {
 	id: ID!
 }
@@ -9,7 +8,6 @@ type Game {
 	url: String!
 
 	dispatcher: Dispatcher!
-	state: State!
+	state(block: Int, simulated: Boolean): State!
 	router: Router!
 }
-

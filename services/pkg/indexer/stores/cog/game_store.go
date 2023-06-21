@@ -5,13 +5,11 @@ import (
 	"fmt"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/benbjohnson/immutable"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/playmint/ds-node/pkg/api/model"
-	"github.com/playmint/ds-node/pkg/client"
 	"github.com/playmint/ds-node/pkg/client/alchemy"
 	"github.com/playmint/ds-node/pkg/contracts/game"
 	"github.com/playmint/ds-node/pkg/indexer/eventwatcher"
@@ -22,30 +20,28 @@ import (
 const LATEST = "latest"
 
 type GameStore struct {
-	games         *immutable.Map[string, *model.Game]
-	latest        *model.Game
-	latestByName  map[string]*model.Game
-	abi           *abi.ABI
-	events        *eventwatcher.Watcher
-	client        *alchemy.Client
-	notifications chan interface{}
-	log           zerolog.Logger
+	games        *immutable.Map[string, *model.Game]
+	latest       *model.Game
+	latestByName map[string]*model.Game
+	abi          *abi.ABI
+	events       *eventwatcher.Watcher
+	client       *alchemy.Client
+	log          zerolog.Logger
 	sync.RWMutex
 }
 
-func NewGameStore(ctx context.Context, client *alchemy.Client, watcher *eventwatcher.Watcher, notifications chan interface{}) (*GameStore, error) {
+func NewGameStore(ctx context.Context, client *alchemy.Client, watcher *eventwatcher.Watcher) (*GameStore, error) {
 	cabi, err := abi.JSON(strings.NewReader(game.BaseGameABI))
 	if err != nil {
 		return nil, err
 	}
 	store := &GameStore{
-		client:        client,
-		abi:           &cabi,
-		events:        watcher,
-		notifications: notifications,
-		games:         immutable.NewMap[string, *model.Game](nil),
-		log:           log.With().Str("service", "indexer").Str("component", "gamestore").Logger(),
-		latestByName:  map[string]*model.Game{},
+		client:       client,
+		abi:          &cabi,
+		events:       watcher,
+		games:        immutable.NewMap[string, *model.Game](nil),
+		log:          log.With().Str("service", "indexer").Str("component", "gamestore").Logger(),
+		latestByName: map[string]*model.Game{},
 	}
 
 	// watch all events from all contracts that match the GameDeployed topic
@@ -60,38 +56,37 @@ func NewGameStore(ctx context.Context, client *alchemy.Client, watcher *eventwat
 	return store, nil
 }
 
-func (rs *GameStore) emitGame(game *model.Game) {
-	rs.notifications <- game
+func (rs *GameStore) Fork(ctx context.Context, watcher *eventwatcher.Watcher, client *alchemy.Client) *GameStore {
+	return rs
 }
 
-func (rs *GameStore) watch(ctx context.Context, events chan types.Log) {
+func (rs *GameStore) watch(ctx context.Context, blocks chan *eventwatcher.LogBatch) {
 	for {
 		select {
 		case <-ctx.Done():
 			return
-		case rawEvent := <-events:
-			eventABI, err := rs.abi.EventByID(rawEvent.Topics[0])
-			if err != nil {
-				rs.log.Warn().Err(err).Msg("unhandleable event topic")
-				continue
-			}
-			switch eventABI.RawName {
-			case "GameDeployed":
-				var evt game.BaseGameGameDeployed
-				if err := unpackLog(rs.abi, &evt, eventABI.RawName, rawEvent); err != nil {
-					rs.log.Warn().Err(err).Msgf("undecodable %T event", evt)
+		case block := <-blocks:
+			for _, rawEvent := range block.Logs {
+				eventABI, err := rs.abi.EventByID(rawEvent.Topics[0])
+				if err != nil {
+					rs.log.Debug().Msgf("unhandleable event topic: %v", err)
 					continue
 				}
-				evt.Raw = rawEvent
-				err := rs.setGame(&evt)
-				if err != nil && client.IsRetryable(err) {
-					time.Sleep(1 * time.Second)
-					events <- rawEvent
-				} else if err != nil {
-					rs.log.Error().Err(err).Msgf("failed process %T event", evt)
+				switch eventABI.RawName {
+				case "GameDeployed":
+					var evt game.BaseGameGameDeployed
+					if err := unpackLog(rs.abi, &evt, eventABI.RawName, rawEvent); err != nil {
+						rs.log.Warn().Err(err).Msgf("undecodable %T event", evt)
+						continue
+					}
+					evt.Raw = rawEvent
+					err := rs.setGame(&evt)
+					if err != nil {
+						rs.log.Error().Err(err).Msgf("failed process %T event", evt)
+					}
+				default:
+					rs.log.Warn().Msgf("ignoring unhandled event type %v", eventABI)
 				}
-			default:
-				rs.log.Warn().Msgf("ignoring unhandled event type %v", eventABI)
 			}
 		}
 	}
@@ -135,8 +130,6 @@ func (rs *GameStore) setGame(evt *game.BaseGameGameDeployed) error {
 	// TODO: probably disable this from config as it's a bit weird in prod
 	rs.latest = game
 	rs.latestByName[meta.Name] = game
-
-	rs.emitGame(game)
 
 	return nil
 }

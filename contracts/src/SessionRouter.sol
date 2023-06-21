@@ -13,10 +13,6 @@ using LibString for uint32;
 bytes constant PREFIX_MESSAGE = "\x19Ethereum Signed Message:\n";
 bytes constant REVOKE_MESSAGE = "You are signing out of session: ";
 
-error SessionExpiryTooLong();
-error SessionUnauthorized();
-error SessionExpired();
-
 uint32 constant MAX_TTL = 40000;
 
 contract SessionRouter is Router {
@@ -69,7 +65,7 @@ contract SessionRouter is Router {
             bytes32(sig[32:64])
         );
         if (ownerAddr == address(0)) {
-            revert SessionUnauthorized();
+            revert("SessionUnauthorized");
         }
         _authorizeAddr(dispatcher, ttl, scopes, sessionAddr, ownerAddr);
     }
@@ -86,7 +82,7 @@ contract SessionRouter is Router {
     function revokeAddr(address addr) public {
         Session storage session = sessions[addr];
         if (session.owner != msg.sender) {
-            revert SessionUnauthorized();
+            revert("SessionUnauthorized");
         }
         delete sessions[addr];
         emit SessionDestroy(addr);
@@ -102,7 +98,7 @@ contract SessionRouter is Router {
         );
         Session storage session = sessions[addr];
         if (session.owner != owner) {
-            revert SessionUnauthorized();
+            revert("SessionUnauthorized");
         }
         delete sessions[addr];
     }
@@ -137,10 +133,10 @@ contract SessionRouter is Router {
             session = sessions[signer];
         }
         if (session.owner == address(0)) {
-            revert SessionUnauthorized();
+            revert("SessionUnauthorized");
         }
         if (block.number > session.exp) {
-            revert SessionExpired();
+            revert("SessionExpired");
         }
         // TODO: replay protection
         Context memory ctx = Context({sender: session.owner, scopes: session.scopes, clock: uint32(block.number)});
@@ -160,7 +156,7 @@ contract SessionRouter is Router {
     function expires(uint32 ttl) internal view returns (uint32) {
         if (ttl > MAX_TTL) {
             // TODO: make this configurable
-            revert SessionExpiryTooLong();
+            revert("SessionExpiryTooLong");
         }
         return uint32(block.number + ttl);
     }

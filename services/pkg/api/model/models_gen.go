@@ -30,6 +30,14 @@ type Annotation struct {
 	Value string `json:"value"`
 }
 
+type BlockEvent struct {
+	ID        string `json:"id"`
+	Block     int    `json:"block"`
+	Simulated bool   `json:"simulated"`
+}
+
+func (BlockEvent) IsEvent() {}
+
 type ContractConfig struct {
 	Name    string `json:"name"`
 	ChainID int    `json:"chainId"`
@@ -94,15 +102,6 @@ type RelMatch struct {
 	Key *int               `json:"key"`
 }
 
-type RemoveEdgeEvent struct {
-	ID   string `json:"id"`
-	From string `json:"from"`
-	Rel  string `json:"rel"`
-	Key  int    `json:"key"`
-}
-
-func (RemoveEdgeEvent) IsEvent() {}
-
 type Router struct {
 	ID           string               `json:"id"`
 	Sessions     []*Session           `json:"sessions"`
@@ -115,27 +114,10 @@ type SessionScope struct {
 	FullAccess bool `json:"FullAccess"`
 }
 
-type SetAnnotationEvent struct {
-	ID   string `json:"id"`
-	From string `json:"from"`
-	Name string `json:"name"`
-}
-
-func (SetAnnotationEvent) IsEvent() {}
-
-type SetEdgeEvent struct {
-	ID   string `json:"id"`
-	From string `json:"from"`
-	To   string `json:"to"`
-	Rel  string `json:"rel"`
-	Key  int    `json:"key"`
-}
-
-func (SetEdgeEvent) IsEvent() {}
-
 type State struct {
-	ID    string `json:"id"`
-	Block int    `json:"block"`
+	ID        string `json:"id"`
+	Block     int    `json:"block"`
+	Simulated bool   `json:"simulated"`
 	// nodes returns any nodes that match the Match filter.
 	Nodes []*Node `json:"nodes"`
 	// node returns the first node that mates the Match filter.

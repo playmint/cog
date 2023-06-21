@@ -1,33 +1,15 @@
-
 interface Event {
 	id: ID!
 }
 
-type SetEdgeEvent implements Event {
+type BlockEvent implements Event {
 	id: ID!
-	from: String!
-	to: String!
-	rel: String!
-	key: Int!
+	block: Int!
+	simulated: Boolean!
 }
-
-type RemoveEdgeEvent implements Event {
-	id: ID!
-	from: String!
-	rel: String!
-	key: Int!
-}
-
-type SetAnnotationEvent implements Event {
-	id: ID!
-	from: String!
-	name: String!
-}
-
 
 type Subscription {
-	events(gameID: ID!): Event!
+	events(gameID: ID!, simulated: Boolean): Event!
 	transaction(gameID: ID!, owner: String): ActionTransaction!
 	session(gameID: ID!, owner: String): Session!
 }
-

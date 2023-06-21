@@ -3,6 +3,7 @@ package alchemy
 import (
 	"context"
 	"crypto/ecdsa"
+	"encoding/json"
 	"fmt"
 	"math/big"
 	"sync"
@@ -119,6 +120,41 @@ func (c *Client) NewRelayTransactor(ctx context.Context) (*bind.TransactOpts, er
 	// txOpts.GasPrice = gasPrice
 
 	return txOpts, nil
+}
+
+// [{"forking": {"jsonRpcUrl": "httKBrdf", "blockNumber": 14000000}}
+func (c *Client) Reset(ctx context.Context, remoteURL string, remoteBlockNumber uint64) (*json.RawMessage, error) {
+	forking := map[string]interface{}{
+		"jsonRpcUrl":  remoteURL,
+		"blockNumber": remoteBlockNumber,
+	}
+	params := map[string]interface{}{
+		"forking": forking,
+	}
+	var res json.RawMessage
+	err := c.rpc.CallContext(ctx, &res, "anvil_reset", params)
+	if err != nil {
+		return nil, err
+	}
+	return &res, nil
+}
+
+func (c *Client) EnableAutoMine(ctx context.Context) (*json.RawMessage, error) {
+	var res json.RawMessage
+	err := c.rpc.CallContext(ctx, &res, "evm_setAutomine", true)
+	if err != nil {
+		return nil, err
+	}
+	return &res, nil
+}
+
+func (c *Client) MineEmptyBlock(ctx context.Context) (*json.RawMessage, error) {
+	var res json.RawMessage
+	err := c.rpc.CallContext(ctx, &res, "anvil_mine", 1)
+	if err != nil {
+		return nil, err
+	}
+	return &res, nil
 }
 
 func (c *Client) EstimateContractGas(ctx context.Context, opts *bind.TransactOpts, contract *common.Address, input []byte) error {
