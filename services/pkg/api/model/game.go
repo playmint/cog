@@ -20,10 +20,18 @@ func (game *Game) Dispatcher() *Dispatcher {
 	}
 }
 
-func (game *Game) State() *State {
-	return &State{
+func (game *Game) State(requestedBlock *int, allowSimulated *bool) *State {
+
+	s := &State{
 		ID: game.StateAddress.Hex(),
 	}
+	if allowSimulated != nil && *allowSimulated {
+		s.Simulated = true
+	}
+	if requestedBlock != nil {
+		s.Block = *requestedBlock
+	}
+	return s
 }
 
 func (game *Game) Router() *Router {

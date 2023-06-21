@@ -6,6 +6,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/benbjohnson/immutable"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -17,26 +18,24 @@ import (
 )
 
 type StateStore struct {
-	wg            map[uint64]*sync.WaitGroup
-	graphs        map[uint64]map[common.Address]*model.Graph
-	latest        uint64
-	abi           *abi.ABI
-	notifications chan interface{}
-	log           zerolog.Logger
+	wg     map[uint64]*sync.WaitGroup
+	graphs *immutable.Map[uint64, *immutable.Map[string, *model.Graph]]
+	latest uint64
+	abi    *abi.ABI
+	log    zerolog.Logger
 	sync.RWMutex
 }
 
-func NewStateStore(ctx context.Context, watcher *eventwatcher.Watcher, notifications chan interface{}) (*StateStore, error) {
+func NewStateStore(ctx context.Context, watcher *eventwatcher.Watcher) (*StateStore, error) {
 	cabi, err := abi.JSON(strings.NewReader(state.StateABI))
 	if err != nil {
 		panic(err)
 	}
 	store := &StateStore{
-		graphs:        map[uint64]map[common.Address]*model.Graph{},
-		wg:            map[uint64]*sync.WaitGroup{},
-		abi:           &cabi,
-		notifications: notifications,
-		log:           log.With().Str("service", "indexer").Str("component", "statestore").Str("name", "latest").Logger(),
+		graphs: immutable.NewMap[uint64, *immutable.Map[string, *model.Graph]](nil),
+		wg:     map[uint64]*sync.WaitGroup{},
+		abi:    &cabi,
+		log:    log.With().Str("service", "indexer").Str("component", "statestore").Str("name", "latest").Logger(),
 	}
 	store.watch(ctx, watcher)
 	return store, nil
@@ -65,26 +64,14 @@ func (rs *StateStore) Fork(ctx context.Context, watcher *eventwatcher.Watcher, b
 	defer rs.Unlock()
 
 	newStore := &StateStore{
-		graphs:        map[uint64]map[common.Address]*model.Graph{},
-		wg:            map[uint64]*sync.WaitGroup{},
-		latest:        blockNumber,
-		abi:           rs.abi,
-		notifications: rs.notifications,
-		log:           rs.log.With().Str("name", fmt.Sprintf("fork-%d", blockNumber)).Logger(),
-	}
-	newStore.graphs[blockNumber] = map[common.Address]*model.Graph{}
-	for addr, g := range rs.graphs[blockNumber] {
-		newStore.graphs[blockNumber][addr] = g
+		graphs: rs.graphs,
+		wg:     map[uint64]*sync.WaitGroup{},
+		latest: blockNumber,
+		abi:    rs.abi,
+		log:    rs.log.With().Str("name", fmt.Sprintf("fork-%d", blockNumber)).Logger(),
 	}
 	newStore.watch(ctx, watcher)
 	return newStore
-}
-
-func (rs *StateStore) emitStateEvent(stateAddr common.Address, stateEvent model.Event) {
-	// rs.notifications <- &model.StateEvent{
-	// 	Event:   stateEvent,
-	// 	StateID: stateAddr.Hex(),
-	// }
 }
 
 func (rs *StateStore) watch(ctx context.Context, watcher *eventwatcher.Watcher) {
@@ -107,9 +94,9 @@ func (rs *StateStore) watch(ctx context.Context, watcher *eventwatcher.Watcher) 
 func (rs *StateStore) processBlock(ctx context.Context, block *eventwatcher.LogBatch) {
 	rs.Lock()
 	defer rs.Unlock()
-	graphs, ok := rs.graphs[rs.latest]
+	graphs, ok := rs.graphs.Get(rs.latest)
 	if !ok {
-		graphs = map[common.Address]*model.Graph{}
+		graphs = immutable.NewMap[string, *model.Graph](nil)
 	}
 	for _, rawEvent := range block.Logs {
 		if rawEvent.Removed {
@@ -122,7 +109,7 @@ func (rs *StateStore) processBlock(ctx context.Context, block *eventwatcher.LogB
 			rs.log.Debug().Msgf("unhandleable event topic: %v", err)
 			continue
 		}
-		g, ok := rs.graphs[rs.latest][rawEvent.Address]
+		g, ok := graphs.Get(rawEvent.Address.Hex())
 		if !ok {
 			g = model.NewGraph(rawEvent.BlockNumber)
 		}
@@ -186,35 +173,15 @@ func (rs *StateStore) processBlock(ctx context.Context, block *eventwatcher.LogB
 		default:
 			rs.log.Warn().Msgf("ignoring unhandled event type %v", eventABI)
 		}
-		graphs[rawEvent.Address] = g
+		graphs = graphs.Set(rawEvent.Address.Hex(), g)
 	}
-	rs.graphs[uint64(block.ToBlock)] = map[common.Address]*model.Graph{}
-	for addr, g := range graphs {
-		rs.graphs[uint64(block.ToBlock)][addr] = g
-	}
+	rs.graphs = rs.graphs.Set(uint64(block.ToBlock), graphs)
 	rs.latest = uint64(block.ToBlock)
 	rs.log.Warn().Msgf("latest now %d", rs.latest)
 
 	wg, ok := rs.wg[uint64(block.ToBlock)]
 	if ok {
 		wg.Done()
-	}
-	// for addr := range graphs {
-	// 	rs.notifications <- &model.StateEvent{
-	// 		Event:   &model.SetAnnotationEvent{}, // FIXME: just using this as a proxy to mean "an update arrived" for now
-	// 		StateID: addr.Hex(),
-	// 	}
-	// }
-}
-
-func (rs *StateStore) NotifyAll() {
-	rs.RLock()
-	defer rs.RUnlock()
-	for addr := range rs.graphs[rs.latest] {
-		rs.notifications <- &model.StateEvent{
-			Event:   &model.SetAnnotationEvent{}, // FIXME: just using this as a proxy to mean "an update arrived" for now
-			StateID: addr.Hex(),
-		}
 	}
 }
 
@@ -272,15 +239,6 @@ func (rs *StateStore) setEdge(g *model.Graph, evt *state.StateEdgeSet) (*model.G
 		evt.Raw.BlockNumber,
 	)
 
-	// commit the graph
-	rs.emitStateEvent(evt.Raw.Address, &model.SetEdgeEvent{
-		ID:   fmt.Sprintf("%d-%d", evt.Raw.BlockNumber, evt.Raw.Index),
-		From: srcNodeID,
-		To:   dstNodeID,
-		Rel:  relID,
-		Key:  int(relKey),
-	})
-
 	return g, nil
 }
 
@@ -300,8 +258,21 @@ func (rs *StateStore) removeEdge(g *model.Graph, evt *state.StateEdgeRemove) (*m
 	return g, nil
 }
 
-func (rs *StateStore) GetGraph(stateContractAddr common.Address) *model.Graph {
+func (rs *StateStore) GetGraph(stateContractAddr common.Address, block int) *model.Graph {
 	rs.Lock()
 	defer rs.Unlock()
-	return rs.graphs[rs.latest][stateContractAddr]
+	b := rs.latest
+	if block != 0 {
+		b = uint64(block)
+	}
+
+	graphs, ok := rs.graphs.Get(b)
+	if !ok {
+		return nil
+	}
+	g, ok := graphs.Get(stateContractAddr.Hex())
+	if !ok {
+		return nil
+	}
+	return g
 }

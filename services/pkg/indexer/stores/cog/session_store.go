@@ -18,25 +18,23 @@ import (
 var FULL_ACCESS uint32 = 0xffffffff
 
 type SessionStore struct {
-	sessions      *immutable.Map[string, *immutable.Map[string, *model.Session]]
-	abi           *abi.ABI
-	events        *eventwatcher.Watcher
-	notifications chan interface{}
-	log           zerolog.Logger
+	sessions *immutable.Map[string, *immutable.Map[string, *model.Session]]
+	abi      *abi.ABI
+	events   *eventwatcher.Watcher
+	log      zerolog.Logger
 	sync.RWMutex
 }
 
-func NewSessionStore(ctx context.Context, watcher *eventwatcher.Watcher, notifications chan interface{}) (*SessionStore, error) {
+func NewSessionStore(ctx context.Context, watcher *eventwatcher.Watcher) (*SessionStore, error) {
 	cabi, err := abi.JSON(strings.NewReader(router.SessionRouterABI))
 	if err != nil {
 		return nil, err
 	}
 	store := &SessionStore{
-		abi:           &cabi,
-		events:        watcher,
-		notifications: notifications,
-		sessions:      immutable.NewMap[string, *immutable.Map[string, *model.Session]](nil),
-		log:           log.With().Str("service", "indexer").Str("component", "sessionstore").Logger(),
+		abi:      &cabi,
+		events:   watcher,
+		sessions: immutable.NewMap[string, *immutable.Map[string, *model.Session]](nil),
+		log:      log.With().Str("service", "indexer").Str("component", "sessionstore").Logger(),
 	}
 
 	// watch all events from all contracts that match the SessionCreate topic
@@ -49,10 +47,6 @@ func NewSessionStore(ctx context.Context, watcher *eventwatcher.Watcher, notific
 
 	go store.watch(ctx, queue)
 	return store, nil
-}
-
-func (rs *SessionStore) emitSession(s *model.Session) {
-	rs.notifications <- s
 }
 
 func (rs *SessionStore) watch(ctx context.Context, blocks chan *eventwatcher.LogBatch) {
@@ -119,8 +113,6 @@ func (rs *SessionStore) setSession(evt *router.SessionRouterSessionCreate) error
 	// add to the set
 	sessions = sessions.Set(evt.Session.Hex(), session)
 	rs.sessions = rs.sessions.Set(evt.Raw.Address.Hex(), sessions)
-
-	rs.emitSession(session)
 
 	return nil
 }

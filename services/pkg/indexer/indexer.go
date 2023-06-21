@@ -2,7 +2,6 @@ package indexer
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/playmint/ds-node/pkg/api/model"
@@ -19,13 +18,14 @@ type Indexer interface {
 	// query funcs
 	GetGame(id string) *model.Game
 	GetGames() []*model.Game
-	GetGraph(stateContractAddr common.Address) *model.Graph
+	GetGraph(stateContractAddr common.Address, block int, simulated bool) *model.Graph
 	GetSession(routerAddr common.Address, sessionID string) *model.Session
 	GetSessions(routerAddr common.Address, owner *string) []*model.Session
 	NewSim(ctx context.Context, blockNumber uint64, httpSimClient *alchemy.Client, wsSimClient *alchemy.Client) (*MemoryIndexer, error)
 	GetSim() *MemoryIndexer
 	SetSim(*MemoryIndexer)
-	Notify()
+	Notify(blockNumber int64, simulated bool)
+	SetNotificationsEnabled(enabled bool, simulated bool)
 }
 
 var _ Indexer = &MemoryIndexer{}
@@ -68,33 +68,21 @@ func NewMemoryIndexer(ctx context.Context, notifications chan interface{}, httpP
 	}
 
 	idxr.events, err = eventwatcher.New(eventwatcher.Config{
-		HTTPClient:  idxr.httpClient,
-		Websocket:   idxr.wsClient,
-		Concurrency: 1, // config.IndexerMaxConcurrency, - NodeSet/EdgeSet cannot arrive out of order yet
-		LogRange:    config.IndexerMaxLogRange,
+		HTTPClient:    idxr.httpClient,
+		Websocket:     idxr.wsClient,
+		Concurrency:   1, // config.IndexerMaxConcurrency, - NodeSet/EdgeSet cannot arrive out of order yet
+		LogRange:      config.IndexerMaxLogRange,
+		Notifications: notifications,
 	})
 	if err != nil {
 		return nil, err
 	}
-
-	// layerTwoPendingTx, err := pendingtx.New(pendingtx.Config{
-	// 	Watch:     config.IndexerWatchPending,
-	// 	Websocket: layerTwoWSClient,
-	// 	Addresses: []common.Address{
-	// 		common.HexToAddress(config.Contracts.Router),
-	// 	},
-	// })
-	// if err != nil {
-	// 	return err
-	// }
-	// layerTwoPendingTx.Start(ctx)
 
 	// index cog games, dispatchers, state
 	idxr.gameStore, err = cog.NewGameStore(
 		ctx,
 		idxr.httpClient,
 		idxr.events,
-		idxr.notifications,
 	)
 	if err != nil {
 		return nil, err
@@ -104,7 +92,6 @@ func NewMemoryIndexer(ctx context.Context, notifications chan interface{}, httpP
 	idxr.stateStore, err = cog.NewStateStore(
 		ctx,
 		idxr.events,
-		idxr.notifications,
 	)
 	if err != nil {
 		return nil, err
@@ -114,7 +101,6 @@ func NewMemoryIndexer(ctx context.Context, notifications chan interface{}, httpP
 	idxr.sessionStore, err = cog.NewSessionStore(
 		ctx,
 		idxr.events,
-		idxr.notifications,
 	)
 	if err != nil {
 		return nil, err
@@ -134,12 +120,13 @@ func (idxr *MemoryIndexer) NewSim(ctx context.Context, blockNumber uint64, httpS
 		idxr.sim.events.Stop()
 	}
 	events, err := eventwatcher.New(eventwatcher.Config{
-		HTTPClient:  httpSimClient,
-		Websocket:   wsSimClient,
-		Concurrency: 1,
-		LogRange:    config.IndexerMaxLogRange,
-		EpochBlock:  int64(blockNumber),
-		Name:        fmt.Sprintf("fork-%d", blockNumber),
+		HTTPClient:    httpSimClient,
+		Websocket:     wsSimClient,
+		Concurrency:   1,
+		LogRange:      config.IndexerMaxLogRange,
+		EpochBlock:    int64(blockNumber),
+		Simulated:     true,
+		Notifications: idxr.notifications,
 	})
 	if err != nil {
 		return nil, err
@@ -160,9 +147,22 @@ func (idxr *MemoryIndexer) NewSim(ctx context.Context, blockNumber uint64, httpS
 	return newIdxr, nil
 }
 
-func (idxr *MemoryIndexer) Notify() {
-	if idxr.sim != nil {
-		idxr.sim.stateStore.NotifyAll()
+func (idxr *MemoryIndexer) SetNotificationsEnabled(enabled bool, simulated bool) {
+	if simulated {
+		if idxr.sim != nil {
+			idxr.sim.events.SetNotificationsEnabled(enabled)
+		}
+	} else {
+		idxr.events.SetNotificationsEnabled(enabled)
+	}
+}
+func (idxr *MemoryIndexer) Notify(blockNumber int64, simulated bool) {
+	if simulated {
+		if idxr.sim != nil {
+			idxr.sim.events.Notify(blockNumber)
+		}
+	} else {
+		idxr.events.Notify(blockNumber)
 	}
 }
 
@@ -186,11 +186,12 @@ func (idxr *MemoryIndexer) GetGames() []*model.Game {
 	return idxr.gameStore.GetGames()
 }
 
-func (idxr *MemoryIndexer) GetGraph(stateContractAddr common.Address) *model.Graph {
-	if idxr.sim != nil {
-		return idxr.sim.GetGraph(stateContractAddr)
+func (idxr *MemoryIndexer) GetGraph(stateContractAddr common.Address, block int, simulated bool) *model.Graph {
+	idx := idxr
+	if simulated && idxr.sim != nil {
+		idx = idxr.sim
 	}
-	return idxr.stateStore.GetGraph(stateContractAddr)
+	return idx.stateStore.GetGraph(stateContractAddr, block)
 }
 func (idxr *MemoryIndexer) GetSession(routerAddr common.Address, sessionID string) *model.Session {
 	return idxr.sessionStore.GetSession(routerAddr, sessionID)

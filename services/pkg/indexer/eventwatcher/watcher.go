@@ -12,6 +12,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/event"
+	"github.com/playmint/ds-node/pkg/api/model"
 	"github.com/playmint/ds-node/pkg/client"
 	"github.com/playmint/ds-node/pkg/client/alchemy"
 	"github.com/rs/zerolog"
@@ -29,12 +30,14 @@ type LogBatch struct {
 }
 
 type Config struct {
-	Websocket   *alchemy.Client
-	HTTPClient  *alchemy.Client
-	Concurrency int
-	EpochBlock  int64
-	LogRange    int
-	Name        string
+	Websocket            *alchemy.Client
+	HTTPClient           *alchemy.Client
+	Concurrency          int
+	EpochBlock           int64
+	LogRange             int
+	Simulated            bool
+	Notifications        chan interface{}
+	NotificationsEnabled bool
 }
 
 type Watcher struct {
@@ -59,7 +62,7 @@ func New(cfg Config) (*Watcher, error) {
 		subscribers: []chan *LogBatch{},
 		ready:       make(chan struct{}),
 		config:      cfg,
-		log:         log.With().Str("service", "indexer").Str("component", "eventwatcher").Str("name", cfg.Name).Logger(),
+		log:         log.With().Str("service", "indexer").Str("component", "eventwatcher").Bool("simulated", cfg.Simulated).Logger(),
 	}, nil
 }
 
@@ -223,6 +226,18 @@ func (rs *Watcher) watcher(ctx context.Context, sub event.Subscription, blocks c
 	}
 }
 
+func (rs *Watcher) SetNotificationsEnabled(enable bool) {
+	rs.config.NotificationsEnabled = enable
+}
+
+func (rs *Watcher) Notify(blockNumber int64) {
+	rs.config.Notifications <- &model.BlockEvent{
+		ID:        fmt.Sprintf("block-%d", blockNumber),
+		Block:     int(blockNumber),
+		Simulated: rs.config.Simulated,
+	}
+}
+
 func (rs *Watcher) publisher(ctx context.Context) {
 	for {
 		select {
@@ -230,9 +245,13 @@ func (rs *Watcher) publisher(ctx context.Context) {
 			for _, sub := range rs.subscribers {
 				sub <- logs
 			}
+			if rs.config.NotificationsEnabled {
+				rs.Notify(logs.ToBlock)
+			}
 		case <-ctx.Done():
 			return
 		}
+
 	}
 }
 

@@ -56,6 +56,9 @@ func Main(ctx context.Context) error {
 	<-seqr.Ready()
 	log.Info().Str("service", "sequencer").Msg("ready")
 
+	// start broadcasting notifications
+	idxr.SetNotificationsEnabled(true, false)
+
 	// start graphql api server
 	api := api.Server{
 		Indexer:   idxr,

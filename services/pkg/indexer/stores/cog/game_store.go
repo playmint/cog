@@ -20,30 +20,28 @@ import (
 const LATEST = "latest"
 
 type GameStore struct {
-	games         *immutable.Map[string, *model.Game]
-	latest        *model.Game
-	latestByName  map[string]*model.Game
-	abi           *abi.ABI
-	events        *eventwatcher.Watcher
-	client        *alchemy.Client
-	notifications chan interface{}
-	log           zerolog.Logger
+	games        *immutable.Map[string, *model.Game]
+	latest       *model.Game
+	latestByName map[string]*model.Game
+	abi          *abi.ABI
+	events       *eventwatcher.Watcher
+	client       *alchemy.Client
+	log          zerolog.Logger
 	sync.RWMutex
 }
 
-func NewGameStore(ctx context.Context, client *alchemy.Client, watcher *eventwatcher.Watcher, notifications chan interface{}) (*GameStore, error) {
+func NewGameStore(ctx context.Context, client *alchemy.Client, watcher *eventwatcher.Watcher) (*GameStore, error) {
 	cabi, err := abi.JSON(strings.NewReader(game.BaseGameABI))
 	if err != nil {
 		return nil, err
 	}
 	store := &GameStore{
-		client:        client,
-		abi:           &cabi,
-		events:        watcher,
-		notifications: notifications,
-		games:         immutable.NewMap[string, *model.Game](nil),
-		log:           log.With().Str("service", "indexer").Str("component", "gamestore").Logger(),
-		latestByName:  map[string]*model.Game{},
+		client:       client,
+		abi:          &cabi,
+		events:       watcher,
+		games:        immutable.NewMap[string, *model.Game](nil),
+		log:          log.With().Str("service", "indexer").Str("component", "gamestore").Logger(),
+		latestByName: map[string]*model.Game{},
 	}
 
 	// watch all events from all contracts that match the GameDeployed topic
@@ -60,10 +58,6 @@ func NewGameStore(ctx context.Context, client *alchemy.Client, watcher *eventwat
 
 func (rs *GameStore) Fork(ctx context.Context, watcher *eventwatcher.Watcher, client *alchemy.Client) *GameStore {
 	return rs
-}
-
-func (rs *GameStore) emitGame(game *model.Game) {
-	rs.notifications <- game
 }
 
 func (rs *GameStore) watch(ctx context.Context, blocks chan *eventwatcher.LogBatch) {
@@ -136,8 +130,6 @@ func (rs *GameStore) setGame(evt *game.BaseGameGameDeployed) error {
 	// TODO: probably disable this from config as it's a bit weird in prod
 	rs.latest = game
 	rs.latestByName[meta.Name] = game
-
-	rs.emitGame(game)
 
 	return nil
 }
