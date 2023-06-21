@@ -18,7 +18,6 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/playmint/ds-node/pkg/api/model"
 	"github.com/playmint/ds-node/pkg/client/alchemy"
-	"github.com/playmint/ds-node/pkg/config"
 	"github.com/playmint/ds-node/pkg/contracts/router"
 	"github.com/playmint/ds-node/pkg/indexer"
 	"github.com/rs/zerolog"
@@ -61,31 +60,37 @@ type MemorySequencer struct {
 	pending    map[string]*model.ActionBatch
 	processing map[string]*model.ActionBatch
 	// batches are lists of actions, grouped by Router has processed
-	success       map[string][]*model.ActionBatch
-	failure       map[string][]*model.ActionBatch
-	httpClient    *alchemy.Client
-	simHttpClient *alchemy.Client
-	simWsClient   *alchemy.Client
-	simBlock      uint64
-	notifications chan interface{}
-	idxr          indexer.Indexer
-	log           zerolog.Logger
+	success           map[string][]*model.ActionBatch
+	failure           map[string][]*model.ActionBatch
+	chainProviderHTTP string
+	chainHttpClient   *alchemy.Client
+	simProviderHTTP   string
+	simProviderWS     string
+	simHttpClient     *alchemy.Client
+	simWsClient       *alchemy.Client
+	simBlock          uint64
+	notifications     chan interface{}
+	idxr              indexer.Indexer
+	log               zerolog.Logger
 	sync.RWMutex
 }
 
-func NewMemorySequencer(ctx context.Context, key *ecdsa.PrivateKey, notifications chan interface{}, httpProviderURL string, simProviderURL string, idxr indexer.Indexer) (*MemorySequencer, error) {
+func NewMemorySequencer(ctx context.Context, key *ecdsa.PrivateKey, notifications chan interface{}, chainProviderHTTP string, simProviderHTTP string, simProviderWS string, idxr indexer.Indexer) (*MemorySequencer, error) {
 	var err error
 	seqr := &MemorySequencer{
-		PrivateKey:    key,
-		notifications: notifications,
-		log:           log.With().Str("service", "sequencer").Logger(),
-		idxr:          idxr,
+		PrivateKey:        key,
+		notifications:     notifications,
+		log:               log.With().Str("service", "sequencer").Logger(),
+		idxr:              idxr,
+		simProviderHTTP:   simProviderHTTP,
+		simProviderWS:     simProviderWS,
+		chainProviderHTTP: chainProviderHTTP,
 	}
 	// setup an RPC client
-	seqr.httpClient, err = alchemy.Dial(
-		httpProviderURL,
-		config.SequencerMaxConcurrency,
-		config.SequencerPrivateKey,
+	seqr.chainHttpClient, err = alchemy.Dial(
+		seqr.chainProviderHTTP,
+		1,
+		seqr.PrivateKey,
 	)
 	if err != nil {
 		return nil, err
@@ -199,7 +204,7 @@ func (seqr *MemorySequencer) commit(ctx context.Context) {
 	seqr.pending = map[string]*model.ActionBatch{}
 	seqr.Unlock()
 
-	latestBlock, _ := seqr.httpClient.BlockNumber(ctx)
+	latestBlock, _ := seqr.chainHttpClient.BlockNumber(ctx)
 
 	todo := 0
 	for _, batch := range seqr.processing {
@@ -209,14 +214,14 @@ func (seqr *MemorySequencer) commit(ctx context.Context) {
 		todo++
 	}
 	if todo == 0 {
-		if _, err := seqr.httpClient.MineEmptyBlock(ctx); err != nil {
+		if _, err := seqr.chainHttpClient.MineEmptyBlock(ctx); err != nil {
 			seqr.log.Error().
 				Err(err).
 				Msg("mine-empty-block")
 		} else {
 			seqr.log.Info().
 				Msg("mine-empty-block")
-			latestBlock, err = seqr.httpClient.BlockNumber(ctx)
+			latestBlock, err = seqr.chainHttpClient.BlockNumber(ctx)
 			if err != nil {
 				seqr.log.Error().
 					Err(err).
@@ -231,7 +236,7 @@ func (seqr *MemorySequencer) commit(ctx context.Context) {
 			continue
 		}
 		for _, action := range batch.Transactions {
-			rcpt, err := seqr.commitTxWithClient(ctx, common.HexToAddress(routerAddr), action, seqr.httpClient)
+			rcpt, err := seqr.commitTxWithClient(ctx, common.HexToAddress(routerAddr), action, seqr.chainHttpClient)
 			if rcpt != nil {
 				block := int(uint32(rcpt.BlockNumber.Uint64()))
 				batch.Block = &block
@@ -286,25 +291,17 @@ func (seqr *MemorySequencer) commit(ctx context.Context) {
 func (seqr *MemorySequencer) resetSim(ctx context.Context, latest uint64) (err error) {
 	seqr.log.Info().Msg("dial-client")
 	// new simulation client
-	seqr.simHttpClient, err = alchemy.Dial(
-		config.SimulationProviderHTTP,
-		config.SequencerMaxConcurrency,
-		config.SequencerPrivateKey,
-	)
+	seqr.simHttpClient, err = alchemy.Dial(seqr.simProviderHTTP, 1, seqr.PrivateKey)
 	if err != nil {
 		return err
 	}
-	seqr.simWsClient, err = alchemy.Dial(
-		config.SimulationProviderWS,
-		config.SequencerMaxConcurrency,
-		config.SequencerPrivateKey,
-	)
+	seqr.simWsClient, err = alchemy.Dial(seqr.simProviderWS, 1, seqr.PrivateKey)
 	if err != nil {
 		return err
 	}
 	// fork sim chain
 	seqr.log.Info().Msg("sim-start-reset")
-	_, err = seqr.simHttpClient.Reset(ctx, config.SequencerProviderHTTP, latest)
+	_, err = seqr.simHttpClient.Reset(ctx, seqr.chainProviderHTTP, latest)
 	if err != nil {
 		return err
 	}
@@ -398,7 +395,7 @@ func (seqr *MemorySequencer) commitTxWithClient(
 }
 
 func (seqr *MemorySequencer) Signout(ctx context.Context, routerAddr common.Address, sessionKey common.Address, permit string) error {
-	client := seqr.httpClient
+	client := seqr.chainHttpClient
 	client.Lock()
 	defer client.Unlock()
 
@@ -432,7 +429,7 @@ func (seqr *MemorySequencer) Signout(ctx context.Context, routerAddr common.Addr
 }
 
 func (seqr *MemorySequencer) Signin(ctx context.Context, routerAddr common.Address, dispatcherAddr common.Address, sessionKey common.Address, ttl uint32, scopes uint32, permit string) error {
-	client := seqr.httpClient
+	client := seqr.chainHttpClient
 	client.Lock()
 	defer client.Unlock()
 

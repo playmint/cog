@@ -45,7 +45,15 @@ func Main(ctx context.Context) error {
 	}
 
 	// start a sequencer
-	seqr, err := sequencer.NewMemorySequencer(ctx, config.SequencerPrivateKey, notifications, config.SequencerProviderHTTP, config.SimulationProviderHTTP, idxr)
+	seqr, err := sequencer.NewMemorySequencer(
+		ctx,
+		config.SequencerPrivateKey,
+		notifications,
+		config.SequencerProviderHTTP,
+		config.SimulationProviderHTTP,
+		config.SimulationProviderWS,
+		idxr,
+	)
 	if err != nil {
 		return err
 	}
