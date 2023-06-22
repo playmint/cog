@@ -18,6 +18,17 @@ func (r *gameResolver) State(ctx context.Context, obj *model.Game, block *int, s
 	return obj.State(block, simulated), nil
 }
 
+func (r *gameResolver) Subscribers(ctx context.Context, obj *model.Game) (int, error) {
+	if r.Subscriptions == nil && r.Subscriptions.Events == nil {
+		return 0, nil
+	}
+	subs, ok := r.Subscriptions.Events[obj.StateAddress.Hex()]
+	if !ok {
+		return 0, nil
+	}
+	return len(subs), nil
+}
+
 // Game returns generated.GameResolver implementation.
 func (r *Resolver) Game() generated.GameResolver { return &gameResolver{r} }
 

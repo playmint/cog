@@ -125,12 +125,13 @@ type ComplexityRoot struct {
 	}
 
 	Game struct {
-		Dispatcher func(childComplexity int) int
-		ID         func(childComplexity int) int
-		Name       func(childComplexity int) int
-		Router     func(childComplexity int) int
-		State      func(childComplexity int, block *int, simulated *bool) int
-		URL        func(childComplexity int) int
+		Dispatcher  func(childComplexity int) int
+		ID          func(childComplexity int) int
+		Name        func(childComplexity int) int
+		Router      func(childComplexity int) int
+		State       func(childComplexity int, block *int, simulated *bool) int
+		Subscribers func(childComplexity int) int
+		URL         func(childComplexity int) int
 	}
 
 	Mutation struct {
@@ -197,6 +198,8 @@ type ComplexityRoot struct {
 
 type GameResolver interface {
 	State(ctx context.Context, obj *model.Game, block *int, simulated *bool) (*model.State, error)
+
+	Subscribers(ctx context.Context, obj *model.Game) (int, error)
 }
 type MutationResolver interface {
 	Signup(ctx context.Context, gameID string, authorization string) (bool, error)
@@ -588,6 +591,13 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 		}
 
 		return e.complexity.Game.State(childComplexity, args["block"].(*int), args["simulated"].(*bool)), true
+
+	case "Game.subscribers":
+		if e.complexity.Game.Subscribers == nil {
+			break
+		}
+
+		return e.complexity.Game.Subscribers(childComplexity), true
 
 	case "Game.url":
 		if e.complexity.Game.URL == nil {
@@ -1098,6 +1108,7 @@ type Game {
 	dispatcher: Dispatcher!
 	state(block: Int, simulated: Boolean): State!
 	router: Router!
+	subscribers: Int!
 }
 `, BuiltIn: false},
 	{Name: "schema/mutations.graphqls", Input: `
@@ -3758,6 +3769,41 @@ func (ec *executionContext) _Game_router(ctx context.Context, field graphql.Coll
 	res := resTmp.(*model.Router)
 	fc.Result = res
 	return ec.marshalNRouter2ᚖgithubᚗcomᚋplaymintᚋdsᚑnodeᚋpkgᚋapiᚋmodelᚐRouter(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) _Game_subscribers(ctx context.Context, field graphql.CollectedField, obj *model.Game) (ret graphql.Marshaler) {
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	fc := &graphql.FieldContext{
+		Object:     "Game",
+		Field:      field,
+		Args:       nil,
+		IsMethod:   true,
+		IsResolver: true,
+	}
+
+	ctx = graphql.WithFieldContext(ctx, fc)
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Game().Subscribers(rctx, obj)
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(int)
+	fc.Result = res
+	return ec.marshalNInt2int(ctx, field.Selections, res)
 }
 
 func (ec *executionContext) _Mutation_signup(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
@@ -7322,6 +7368,26 @@ func (ec *executionContext) _Game(ctx context.Context, sel ast.SelectionSet, obj
 			if out.Values[i] == graphql.Null {
 				atomic.AddUint32(&invalids, 1)
 			}
+		case "subscribers":
+			field := field
+
+			innerFunc := func(ctx context.Context) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Game_subscribers(ctx, field, obj)
+				if res == graphql.Null {
+					atomic.AddUint32(&invalids, 1)
+				}
+				return res
+			}
+
+			out.Concurrently(i, func() graphql.Marshaler {
+				return innerFunc(ctx)
+
+			})
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
