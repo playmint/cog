@@ -70,7 +70,6 @@ func NewMemoryIndexer(ctx context.Context, notifications chan interface{}, httpP
 	idxr.events, err = eventwatcher.New(eventwatcher.Config{
 		HTTPClient:    idxr.httpClient,
 		Websocket:     idxr.wsClient,
-		Concurrency:   1, // config.IndexerMaxConcurrency, - NodeSet/EdgeSet cannot arrive out of order yet
 		LogRange:      config.IndexerMaxLogRange,
 		Notifications: notifications,
 	})
@@ -122,7 +121,6 @@ func (idxr *MemoryIndexer) NewSim(ctx context.Context, blockNumber uint64, httpS
 	events, err := eventwatcher.New(eventwatcher.Config{
 		HTTPClient:    httpSimClient,
 		Websocket:     wsSimClient,
-		Concurrency:   1,
 		LogRange:      config.IndexerMaxLogRange,
 		EpochBlock:    int64(blockNumber),
 		Simulated:     true,
