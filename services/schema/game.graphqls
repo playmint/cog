@@ -10,4 +10,5 @@ type Game {
 	dispatcher: Dispatcher!
 	state(block: Int, simulated: Boolean): State!
 	router: Router!
+	subscribers: Int!
 }
