@@ -4,8 +4,6 @@ import (
 	"context"
 	"fmt"
 	"math/big"
-	"math/rand"
-	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum"
@@ -13,7 +11,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/playmint/ds-node/pkg/api/model"
-	"github.com/playmint/ds-node/pkg/client"
 	"github.com/playmint/ds-node/pkg/client/alchemy"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
@@ -32,7 +29,6 @@ type LogBatch struct {
 type Config struct {
 	Websocket            *alchemy.Client
 	HTTPClient           *alchemy.Client
-	Concurrency          int
 	EpochBlock           int64
 	LogRange             int
 	Simulated            bool
@@ -54,9 +50,6 @@ func New(cfg Config) (*Watcher, error) {
 	if cfg.LogRange < 1 {
 		return nil, fmt.Errorf("invalid log range config")
 	}
-	if cfg.Concurrency < 1 {
-		return nil, fmt.Errorf("invalid concurrency config")
-	}
 	return &Watcher{
 		sink:        make(chan *LogBatch, 1024),
 		subscribers: []chan *LogBatch{},
@@ -77,25 +70,18 @@ func (rs *Watcher) Start(ctx context.Context) {
 	topicQuery := ethereum.FilterQuery{Topics: [][]common.Hash{rs.topic0}}
 	ctx, rs.stop = context.WithCancel(ctx)
 	go rs.watch(ctx, topicQuery)
-	go rs.fetchEvents(ctx, topicQuery)
 	go rs.publisher(ctx)
 }
 
 func (rs *Watcher) fetchEvents(ctx context.Context, query ethereum.FilterQuery) {
 	nowBlockRes, err := rs.config.HTTPClient.BlockNumber(ctx)
 	if err != nil {
-		rs.log.Fatal().Err(err).Msg("") // FIXME: error system
+		rs.log.Error().Err(err).Msg("fetch-events-get-block")
+		return
 	}
 	nowBlock := int64(nowBlockRes)
 	fromBlock := rs.config.EpochBlock
 	batchSize := int64(rs.config.LogRange)
-
-	var wg sync.WaitGroup
-
-	batchChan := make(chan EventBatch)
-	for i := 0; i < rs.config.Concurrency; i++ {
-		go rs.fetchEventsWorker(ctx, batchChan, query, &wg)
-	}
 
 	for {
 		if fromBlock > nowBlock {
@@ -105,47 +91,34 @@ func (rs *Watcher) fetchEvents(ctx context.Context, query ethereum.FilterQuery) 
 		if fromBlock >= toBlock {
 			break
 		}
-		wg.Add(1)
-		batchChan <- EventBatch{
+		batch := EventBatch{
 			FromBlock: fromBlock,
 			ToBlock:   toBlock,
 		}
+		rs.getBatchWithRetry(ctx, batch, query)
 		fromBlock = fromBlock + batchSize
 	}
 
-	wg.Wait()
-	close(batchChan)
 	close(rs.ready)
 }
 
-func (rs *Watcher) fetchEventsWorker(ctx context.Context, batches chan EventBatch, query ethereum.FilterQuery, wg *sync.WaitGroup) {
-	for batch := range batches {
-		if err := rs.getBatch(ctx, batch, query); err != nil {
-			if client.IsRetryable(err) {
-				rs.log.Warn().
+func (rs *Watcher) getBatchWithRetry(ctx context.Context, batch EventBatch, query ethereum.FilterQuery) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		default:
+			if err := rs.getBatch(ctx, batch, query); err != nil {
+				rs.log.Error().
 					Err(err).
 					Int64("from", batch.FromBlock).
 					Int64("to", batch.ToBlock).
-					Msg("get-batch-rate-limited")
-				go func(batch EventBatch) {
-					// requeue the failed batch with some jitter
-					// TODO: exponetial backoff would be better here to avoid thunder
-					time.Sleep(time.Millisecond * time.Duration(rand.Intn(2000)))
-					rs.log.Info().
-						Int64("from", batch.FromBlock).
-						Int64("to", batch.ToBlock).
-						Msg("requeue-batch")
-					batches <- batch
-				}(batch)
+					Msg("get-batch-with-retry")
+				time.Sleep(time.Second)
 				continue
 			}
-			rs.log.Fatal().
-				Err(err).
-				Int64("from", batch.FromBlock).
-				Int64("to", batch.ToBlock).
-				Msg("get-batch-fail")
+			return
 		}
-		wg.Done()
 	}
 }
 
@@ -169,6 +142,7 @@ func (rs *Watcher) getBatch(ctx context.Context, batch EventBatch, query ethereu
 }
 
 func (rs *Watcher) watch(ctx context.Context, query ethereum.FilterQuery) {
+	rs.fetchEvents(ctx, query)
 	<-rs.ready
 	for {
 		select {
@@ -201,25 +175,10 @@ func (rs *Watcher) watcher(ctx context.Context, sub event.Subscription, blocks c
 				Msg("watcher-sub-err")
 			return
 		case block := <-blocks:
-			retries := 0
-		retry:
-			err := rs.getBatch(ctx, EventBatch{
+			rs.getBatchWithRetry(ctx, EventBatch{
 				FromBlock: block.Number.Int64() - 1,
 				ToBlock:   block.Number.Int64(),
 			}, query)
-			if err != nil {
-				if client.IsRetryable(err) {
-					if retries < 5 {
-						retries++
-						time.Sleep(1 * time.Second)
-						goto retry
-					} else {
-						panic(err)
-					}
-				} else {
-					panic(err) // if we can't read a block we cannot sync so bang!
-				}
-			}
 		case <-ctx.Done():
 			return
 		}
