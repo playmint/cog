@@ -43,17 +43,41 @@ type Graph struct {
 	ann *immutable.Map[string, string]
 	// block is the last seen update to the graph
 	block uint64
+	// cache of edges by node id
+	edgeCache map[string][]*Edge
 }
 
 func NewGraph(block uint64) *Graph {
 	return &Graph{
-		nodes:  immutable.NewMap[string, bool](nil),
-		edges:  immutable.NewMap[string, *DirectedEdge](nil),
-		rels:   immutable.NewMap[string, *state.StateEdgeTypeRegister](nil),
-		kinds:  immutable.NewMap[string, *state.StateNodeTypeRegister](nil),
-		labels: immutable.NewMap[string, *immutable.Map[string, string]](nil),
-		ann:    immutable.NewMap[string, string](nil),
-		block:  block,
+		nodes:     immutable.NewMap[string, bool](nil),
+		edges:     immutable.NewMap[string, *DirectedEdge](nil),
+		rels:      immutable.NewMap[string, *state.StateEdgeTypeRegister](nil),
+		kinds:     immutable.NewMap[string, *state.StateNodeTypeRegister](nil),
+		labels:    immutable.NewMap[string, *immutable.Map[string, string]](nil),
+		ann:       immutable.NewMap[string, string](nil),
+		block:     block,
+		edgeCache: map[string][]*Edge{},
+	}
+}
+
+func (g *Graph) updateEdgeCache() {
+	edgesItr := g.edges.Iterator()
+	for !edgesItr.Done() {
+		_, e, exists := edgesItr.Next()
+		if !exists {
+			continue
+		}
+
+		g.edgeCache[e.from] = append(g.edgeCache[e.from], &Edge{
+			g:            g,
+			DirectedEdge: e,
+			Dir:          RelMatchDirectionOut,
+		})
+		g.edgeCache[e.to] = append(g.edgeCache[e.to], &Edge{
+			g:            g,
+			DirectedEdge: e,
+			Dir:          RelMatchDirectionIn,
+		})
 	}
 }
 
@@ -63,25 +87,27 @@ func (g *Graph) BlockNumber() uint64 {
 
 func (g *Graph) SetRelData(relData *state.StateEdgeTypeRegister) *Graph {
 	return &Graph{
-		nodes:  g.nodes,
-		edges:  g.edges,
-		rels:   g.rels.Set(hexutil.Encode(relData.Id[:]), relData),
-		kinds:  g.kinds,
-		labels: g.labels,
-		ann:    g.ann,
-		block:  g.block,
+		nodes:     g.nodes,
+		edges:     g.edges,
+		rels:      g.rels.Set(hexutil.Encode(relData.Id[:]), relData),
+		kinds:     g.kinds,
+		labels:    g.labels,
+		ann:       g.ann,
+		block:     g.block,
+		edgeCache: g.edgeCache,
 	}
 }
 
 func (g *Graph) SetKindData(kindData *state.StateNodeTypeRegister) *Graph {
 	return &Graph{
-		nodes:  g.nodes,
-		edges:  g.edges,
-		rels:   g.rels,
-		kinds:  g.kinds.Set(hexutil.Encode(kindData.Id[:]), kindData),
-		labels: g.labels,
-		ann:    g.ann,
-		block:  g.block,
+		nodes:     g.nodes,
+		edges:     g.edges,
+		rels:      g.rels,
+		kinds:     g.kinds.Set(hexutil.Encode(kindData.Id[:]), kindData),
+		labels:    g.labels,
+		ann:       g.ann,
+		block:     g.block,
+		edgeCache: g.edgeCache,
 	}
 }
 
@@ -101,13 +127,14 @@ func (g *Graph) SetAnnotationData(nodeID string, label string, ref string, data 
 
 	// build our new graph
 	newGraph := &Graph{
-		nodes:  nodes,
-		edges:  g.edges,
-		rels:   g.rels,
-		kinds:  g.kinds,
-		labels: g.labels.Set(nodeID, labels),
-		ann:    ann,
-		block:  block,
+		nodes:     nodes,
+		edges:     g.edges,
+		rels:      g.rels,
+		kinds:     g.kinds,
+		labels:    g.labels.Set(nodeID, labels),
+		ann:       ann,
+		block:     block,
+		edgeCache: g.edgeCache,
 	}
 
 	return newGraph
@@ -133,14 +160,17 @@ func (g *Graph) SetEdge(relID string, relKey uint8, srcNodeID string, dstNodeID 
 
 	// build our new graph
 	newGraph := &Graph{
-		nodes:  nodes,
-		edges:  edges,
-		rels:   g.rels,
-		kinds:  g.kinds,
-		labels: g.labels,
-		ann:    g.ann,
-		block:  block,
+		nodes:     nodes,
+		edges:     edges,
+		rels:      g.rels,
+		kinds:     g.kinds,
+		labels:    g.labels,
+		ann:       g.ann,
+		block:     block,
+		edgeCache: map[string][]*Edge{},
 	}
+
+	newGraph.updateEdgeCache()
 
 	return newGraph
 }
@@ -159,14 +189,17 @@ func (g *Graph) RemoveEdge(relID string, relKey uint8, srcNodeID string, block u
 
 	// build our new graph
 	newGraph := &Graph{
-		nodes:  g.nodes,
-		edges:  edges,
-		rels:   g.rels,
-		kinds:  g.kinds,
-		labels: g.labels,
-		ann:    g.ann,
-		block:  block,
+		nodes:     g.nodes,
+		edges:     edges,
+		rels:      g.rels,
+		kinds:     g.kinds,
+		labels:    g.labels,
+		ann:       g.ann,
+		block:     block,
+		edgeCache: map[string][]*Edge{},
 	}
+
+	newGraph.updateEdgeCache()
 
 	return newGraph
 }
@@ -424,26 +457,7 @@ func (n *Node) Edges(match *Match) ([]*Edge, error) {
 func (n *Node) getDirectEdges(match *Match) []*Edge {
 	result := []*Edge{}
 
-	edgesItr := n.g.edges.Iterator()
-	for !edgesItr.Done() {
-		_, directedEdge, exists := edgesItr.Next()
-		if !exists {
-			continue
-		}
-		edge := &Edge{
-			g:            n.g,
-			DirectedEdge: directedEdge,
-		}
-		if edge.from == n.ID {
-			// match normal
-			edge.Dir = RelMatchDirectionOut
-		} else if edge.to == n.ID {
-			// match reverse
-			edge.Dir = RelMatchDirectionIn
-		} else {
-			// no direct match
-			continue
-		}
+	for _, edge := range n.g.edgeCache[n.ID] {
 		if !match.MatchEdge(edge) {
 			continue
 		}
