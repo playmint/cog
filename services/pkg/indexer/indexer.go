@@ -6,11 +6,15 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/playmint/ds-node/pkg/api/model"
 	"github.com/playmint/ds-node/pkg/client/alchemy"
-	"github.com/playmint/ds-node/pkg/config"
 	"github.com/playmint/ds-node/pkg/indexer/eventwatcher"
 	"github.com/playmint/ds-node/pkg/indexer/stores/cog"
 	"github.com/playmint/ds-node/pkg/indexer/stores/configstore"
 )
+
+type SyncRequest struct {
+	Game  *model.Game
+	Graph *model.SerializableGraph
+}
 
 type Indexer interface {
 	Ready() chan struct{}
@@ -26,6 +30,8 @@ type Indexer interface {
 	SetSim(*MemoryIndexer)
 	Notify(blockNumber int64, simulated bool)
 	SetNotificationsEnabled(enabled bool, simulated bool)
+	Sync(req *SyncRequest) error
+	Push(batch *eventwatcher.LogBatch) error
 }
 
 var _ Indexer = &MemoryIndexer{}
@@ -39,7 +45,53 @@ type MemoryIndexer struct {
 	events        *eventwatcher.Watcher
 	httpClient    *alchemy.Client
 	wsClient      *alchemy.Client
+	game          *model.Game // FIXME: this is a hack
 	sim           *MemoryIndexer
+}
+
+func NewMemoryIndexer2(ctx context.Context, events *eventwatcher.Watcher) (*MemoryIndexer, error) {
+	var err error
+
+	idxr := &MemoryIndexer{}
+
+	idxr.notifications = make(chan interface{})
+	idxr.events = events
+
+	// index cog games, dispatchers, state
+	idxr.gameStore, err = cog.NewGameStore(
+		ctx,
+		idxr.httpClient,
+		idxr.events,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	// start listening for NodeSet and EdgeSet events
+	idxr.stateStore, err = cog.NewStateStore(
+		ctx,
+		idxr.events,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	// start listening for SessionCreate events
+	idxr.sessionStore, err = cog.NewSessionStore(
+		ctx,
+		idxr.events,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	// index config data
+	idxr.configStore = configstore.New()
+
+	// start event collection
+	// idxr.events.Start(ctx)
+
+	return idxr, nil
 }
 
 func NewMemoryIndexer(ctx context.Context, notifications chan interface{}, httpProviderURL string, wsProviderURL string) (*MemoryIndexer, error) {
@@ -51,7 +103,7 @@ func NewMemoryIndexer(ctx context.Context, notifications chan interface{}, httpP
 
 	idxr.httpClient, err = alchemy.Dial(
 		httpProviderURL,
-		config.IndexerMaxConcurrency,
+		1, //config.IndexerMaxConcurrency,
 		nil,
 	)
 	if err != nil {
@@ -60,7 +112,7 @@ func NewMemoryIndexer(ctx context.Context, notifications chan interface{}, httpP
 
 	idxr.wsClient, err = alchemy.Dial(
 		wsProviderURL,
-		config.IndexerMaxConcurrency,
+		1, //config.IndexerMaxConcurrency,
 		nil,
 	)
 	if err != nil {
@@ -70,8 +122,8 @@ func NewMemoryIndexer(ctx context.Context, notifications chan interface{}, httpP
 	idxr.events, err = eventwatcher.New(eventwatcher.Config{
 		HTTPClient:    idxr.httpClient,
 		Websocket:     idxr.wsClient,
-		Concurrency:   1, // config.IndexerMaxConcurrency, - NodeSet/EdgeSet cannot arrive out of order yet
-		LogRange:      config.IndexerMaxLogRange,
+		Concurrency:   1,    // config.IndexerMaxConcurrency, - NodeSet/EdgeSet cannot arrive out of order yet
+		LogRange:      1000, // config.IndexerMaxLogRange,
 		Notifications: notifications,
 	})
 	if err != nil {
@@ -115,6 +167,20 @@ func NewMemoryIndexer(ctx context.Context, notifications chan interface{}, httpP
 	return idxr, nil
 }
 
+func (idxr *MemoryIndexer) Push(batch *eventwatcher.LogBatch) error {
+	return idxr.stateStore.Push(batch)
+}
+
+func (idxr *MemoryIndexer) Sync(req *SyncRequest) error {
+	idxr.game = req.Game
+	g, err := model.LoadGraph(req.Graph)
+	if err != nil {
+		return err
+	}
+	idxr.stateStore.Sync(req.Game.StateAddress.Hex(), g)
+	return nil
+}
+
 func (idxr *MemoryIndexer) NewSim(ctx context.Context, blockNumber uint64, httpSimClient *alchemy.Client, wsSimClient *alchemy.Client) (*MemoryIndexer, error) {
 	if idxr.sim != nil {
 		idxr.sim.events.Stop()
@@ -123,7 +189,7 @@ func (idxr *MemoryIndexer) NewSim(ctx context.Context, blockNumber uint64, httpS
 		HTTPClient:    httpSimClient,
 		Websocket:     wsSimClient,
 		Concurrency:   1,
-		LogRange:      config.IndexerMaxLogRange,
+		LogRange:      1000, //config.IndexerMaxLogRange,
 		EpochBlock:    int64(blockNumber),
 		Simulated:     true,
 		Notifications: idxr.notifications,
@@ -159,10 +225,10 @@ func (idxr *MemoryIndexer) SetNotificationsEnabled(enabled bool, simulated bool)
 func (idxr *MemoryIndexer) Notify(blockNumber int64, simulated bool) {
 	if simulated {
 		if idxr.sim != nil {
-			idxr.sim.events.Notify(blockNumber)
+			idxr.sim.events.NotifyFullSync(blockNumber)
 		}
 	} else {
-		idxr.events.Notify(blockNumber)
+		idxr.events.NotifyFullSync(blockNumber)
 	}
 }
 
@@ -179,10 +245,16 @@ func (idxr *MemoryIndexer) Ready() chan struct{} {
 }
 
 func (idxr *MemoryIndexer) GetGame(id string) *model.Game {
+	if idxr.game != nil {
+		return idxr.game
+	}
 	return idxr.gameStore.GetGame(id)
 }
 
 func (idxr *MemoryIndexer) GetGames() []*model.Game {
+	if idxr.game != nil {
+		return []*model.Game{idxr.game}
+	}
 	return idxr.gameStore.GetGames()
 }
 

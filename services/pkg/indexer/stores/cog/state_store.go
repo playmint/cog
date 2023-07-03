@@ -41,6 +41,14 @@ func NewStateStore(ctx context.Context, watcher *eventwatcher.Watcher) (*StateSt
 	return store, nil
 }
 
+func (rs *StateStore) Sync(stateAddr string, g *model.Graph) error {
+	graphsByAddr := immutable.NewMap[string, *model.Graph](nil)
+	graphsByAddr = graphsByAddr.Set(stateAddr, g)
+	rs.latest = g.Block
+	rs.graphs = rs.graphs.Set(rs.latest, graphsByAddr)
+	return nil
+}
+
 func (rs *StateStore) Fork(ctx context.Context, watcher *eventwatcher.Watcher, blockNumber uint64) *StateStore {
 	rs.Lock()
 	latest := rs.latest
@@ -91,6 +99,11 @@ func (rs *StateStore) watch(ctx context.Context, watcher *eventwatcher.Watcher) 
 	go rs.watchLoop(ctx, events)
 }
 
+func (rs *StateStore) Push(block *eventwatcher.LogBatch) error {
+	rs.processBlock(context.TODO(), block)
+	return nil
+}
+
 func (rs *StateStore) processBlock(ctx context.Context, block *eventwatcher.LogBatch) {
 	rs.Lock()
 	defer rs.Unlock()
@@ -106,7 +119,7 @@ func (rs *StateStore) processBlock(ctx context.Context, block *eventwatcher.LogB
 		}
 		eventABI, err := rs.abi.EventByID(rawEvent.Topics[0])
 		if err != nil {
-			rs.log.Debug().Msgf("unhandleable event topic: %v", err)
+			rs.log.Warn().Msgf("unhandleable event topic: %v", err)
 			continue
 		}
 		g, ok := graphs.Get(rawEvent.Address.Hex())

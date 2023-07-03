@@ -34,6 +34,8 @@ type BlockEvent struct {
 	ID        string `json:"id"`
 	Block     int    `json:"block"`
 	Simulated bool   `json:"simulated"`
+	Logs      string `json:"logs"`
+	Resync    bool   `json:"resync"`
 }
 
 func (BlockEvent) IsEvent() {}
@@ -122,6 +124,8 @@ type State struct {
 	Nodes []*Node `json:"nodes"`
 	// node returns the first node that mates the Match filter.
 	Node *Node `json:"node"`
+	// dump a serialized version of the entire graph
+	JSON string `json:"json"`
 }
 
 type ActionTransactionStatus string

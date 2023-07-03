@@ -144,17 +144,6 @@ func (seqr *MemorySequencer) Enqueue(ctx context.Context,
 	if routerAddr.Hex() == "" || len(actionData) == 0 || actionSig == "" {
 		return nil, fmt.Errorf("invalid action data")
 	}
-	seqr.Lock()
-	defer seqr.Unlock()
-
-	actualPending, ok := seqr.pending[routerAddr.Hex()]
-	if !ok {
-		actualPending = &model.ActionBatch{
-			ID:            uuid.NewV4().String(),
-			Status:        model.ActionTransactionStatusPending,
-			RouterAddress: routerAddr.Hex(),
-		}
-	}
 
 	tx := &model.ActionTransaction{
 		ID:            uuid.NewV4().String(),
@@ -162,11 +151,12 @@ func (seqr *MemorySequencer) Enqueue(ctx context.Context,
 		Payload:       actionData,
 		Sig:           actionSig,
 		RouterAddress: routerAddr.Hex(),
-		Batch:         actualPending,
+		// Batch:         actualPending,
 	}
 
 	if seqr.simHttpClient != nil && seqr.simBlock > 0 {
-		_, err := seqr.commitTxWithClient(ctx, routerAddr, tx, seqr.simHttpClient)
+		// [!]: experimental loose locking
+		txn, err := seqr.commitTxWithClient(ctx, routerAddr, tx, seqr.simHttpClient)
 		if err != nil {
 			seqr.log.Error().
 				Err(err).
@@ -175,6 +165,16 @@ func (seqr *MemorySequencer) Enqueue(ctx context.Context,
 				Msg("sim-tx-fail")
 			return nil, err
 		}
+		if err := WaitMinedError(ctx, seqr.simHttpClient, txn); err != nil {
+			seqr.log.Error().
+				Err(err).
+				Uint64("block", seqr.simBlock).
+				Str("batch", "sim").
+				Msg("sim-tx-wait")
+			return nil, err
+		}
+
+		// TODO: wiait here
 		seqr.log.Info().
 			Uint64("block", seqr.simBlock).
 			Str("batch", "sim").
@@ -186,6 +186,17 @@ func (seqr *MemorySequencer) Enqueue(ctx context.Context,
 			Msg("sim-not-ready")
 	}
 
+	seqr.Lock()
+	defer seqr.Unlock()
+	actualPending, ok := seqr.pending[routerAddr.Hex()]
+	if !ok {
+		actualPending = &model.ActionBatch{
+			ID:            uuid.NewV4().String(),
+			Status:        model.ActionTransactionStatusPending,
+			RouterAddress: routerAddr.Hex(),
+		}
+	}
+	tx.Batch = actualPending
 	actualPending.Transactions = append(actualPending.Transactions, tx)
 	seqr.pending[routerAddr.Hex()] = actualPending
 	seqr.emitTx(tx)
@@ -236,16 +247,7 @@ func (seqr *MemorySequencer) commit(ctx context.Context) {
 			continue
 		}
 		for _, action := range batch.Transactions {
-			rcpt, err := seqr.commitTxWithClient(ctx, common.HexToAddress(routerAddr), action, seqr.chainHttpClient)
-			if rcpt != nil {
-				block := int(uint32(rcpt.BlockNumber.Uint64()))
-				batch.Block = &block
-				txid := rcpt.TxHash.Hex()
-				batch.Tx = &txid
-				if rcpt.BlockNumber.Uint64() > latestBlock {
-					latestBlock = rcpt.BlockNumber.Uint64()
-				}
-			}
+			_, err := seqr.commitTxWithClient(ctx, common.HexToAddress(routerAddr), action, seqr.chainHttpClient)
 			if err != nil {
 				seqr.log.Error().
 					Err(err).
@@ -315,25 +317,32 @@ func (seqr *MemorySequencer) resetSim(ctx context.Context, latest uint64) (err e
 	if err != nil {
 		return err
 	}
-	head := latest
+	var head *types.Transaction
 	// fast forward the pending queue
 	for routerAddr, batch := range seqr.pending {
 		for _, action := range batch.Transactions {
-			rcpt, err := seqr.commitTxWithClient(ctx, common.HexToAddress(routerAddr), action, seqr.simHttpClient)
+			tx, err := seqr.commitTxWithClient(ctx, common.HexToAddress(routerAddr), action, seqr.simHttpClient)
 			if err != nil {
 				seqr.log.Warn().
 					Err(err).
 					Str("batch", batch.ID).
 					Msg("sim-skipping-bad-pending")
 			}
-			if rcpt.BlockNumber.Uint64() > head {
-				head = rcpt.BlockNumber.Uint64()
-			}
+			head = tx
 		}
 	}
 	// hotswap the indexer
 	seqr.idxr.SetSim(simxr)
-	seqr.idxr.Notify(int64(head), true)
+	if head != nil {
+		rcpt, err := WaitMined(ctx, seqr.simHttpClient, head, 250*time.Millisecond)
+		if err != nil {
+			return err
+		}
+		if rcpt.BlockNumber.Uint64() > latest {
+			latest = rcpt.BlockNumber.Uint64()
+		}
+	}
+	seqr.idxr.Notify(int64(latest), true)
 	seqr.idxr.SetNotificationsEnabled(true, true)
 	seqr.log.Info().
 		Uint64("block", seqr.simBlock).
@@ -346,7 +355,7 @@ func (seqr *MemorySequencer) commitTxWithClient(
 	routerAddr common.Address,
 	action *model.ActionTransaction,
 	client *alchemy.Client,
-) (*types.Receipt, error) {
+) (*types.Transaction, error) {
 	client.Lock()
 	defer client.Unlock()
 	// prep action data
@@ -377,21 +386,7 @@ func (seqr *MemorySequencer) commitTxWithClient(
 		return nil, fmt.Errorf("failed commit batch tx: %v", err)
 	}
 	defer client.IncrementRelayNonce(ctx)
-	// wait til batch success
-	maxWait, cancel := context.WithTimeout(ctx, 1*time.Minute)
-	defer cancel()
-	time.Sleep(50 * time.Millisecond)
-	rcpt, err := bind.WaitMined(maxWait, client, tx)
-	if err != nil {
-		return nil, err
-	}
-	switch rcpt.Status {
-	case 1:
-	default:
-		reason := errorReason(ctx, client, client.Address(), tx, rcpt.BlockNumber)
-		return rcpt, fmt.Errorf("%s", reason)
-	}
-	return rcpt, nil
+	return tx, nil
 }
 
 func (seqr *MemorySequencer) Signout(ctx context.Context, routerAddr common.Address, sessionKey common.Address, permit string) error {
@@ -467,9 +462,9 @@ func (seqr *MemorySequencer) Signin(ctx context.Context, routerAddr common.Addre
 	defer client.IncrementRelayNonce(ctx)
 
 	// wait mined
-	maxWait, cancel := context.WithTimeout(ctx, 1*time.Minute)
+	maxWait, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
-	rcpt, err := bind.WaitMined(maxWait, client, tx)
+	rcpt, err := WaitMined(maxWait, client, tx, 250*time.Millisecond)
 	if err != nil {
 		return err
 	}
@@ -654,4 +649,38 @@ func errorReason(ctx context.Context, b ethereum.ContractCaller, from common.Add
 		return reason
 	}
 	return "failed"
+}
+
+func WaitMined(ctx context.Context, b bind.DeployBackend, tx *types.Transaction, tick time.Duration) (*types.Receipt, error) {
+	queryTicker := time.NewTicker(tick)
+	defer queryTicker.Stop()
+
+	for {
+		receipt, err := b.TransactionReceipt(ctx, tx.Hash())
+		if err == nil {
+			return receipt, nil
+		}
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-queryTicker.C:
+		}
+	}
+}
+
+func WaitMinedError(ctx context.Context, client *alchemy.Client, tx *types.Transaction) error {
+	// wait til batch success
+	maxWait, cancel := context.WithTimeout(ctx, 15*time.Second)
+	defer cancel()
+	rcpt, err := WaitMined(maxWait, client, tx, 50*time.Millisecond)
+	if err != nil {
+		return err
+	}
+	switch rcpt.Status {
+	case 1:
+	default:
+		reason := errorReason(ctx, client, client.Address(), tx, rcpt.BlockNumber)
+		return fmt.Errorf("%s", reason)
+	}
+	return nil
 }

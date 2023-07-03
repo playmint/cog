@@ -67,10 +67,7 @@ func (subs *Subscriptions) Listen(ctx context.Context) {
 						if subscriber.Simulated != nil && *subscriber.Simulated != obj.Simulated {
 							continue
 						}
-						select {
-						case subscriber.Channel <- obj:
-						default:
-						}
+						subscriber.Channel <- obj
 					}
 				}
 			case *ActionTransaction:

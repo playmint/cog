@@ -6,7 +6,21 @@ type BlockEvent implements Event {
 	id: ID!
 	block: Int!
 	simulated: Boolean!
+	logs: String! # json
+	resync: Boolean!
 }
+
+# type BlockLogs {
+# 	address: String!
+# 	topics: [String!]
+# 	data: [String!]
+# 	blockNumber: Int!
+# 	txHash: String!
+# 	txIndex: Int!
+# 	blockHash: String!
+# 	index: Int!
+# 	removed: Boolean!
+# }
 
 type Subscription {
 	events(gameID: ID!, simulated: Boolean): Event!

@@ -2,6 +2,7 @@ package eventwatcher
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"math/big"
 	"math/rand"
@@ -149,6 +150,10 @@ func (rs *Watcher) fetchEventsWorker(ctx context.Context, batches chan EventBatc
 	}
 }
 
+func (rs *Watcher) Push(batch *LogBatch) {
+	rs.sink <- batch
+}
+
 func (rs *Watcher) getBatch(ctx context.Context, batch EventBatch, query ethereum.FilterQuery) error {
 	query.FromBlock = big.NewInt(batch.FromBlock)
 	query.ToBlock = big.NewInt(batch.ToBlock)
@@ -214,10 +219,11 @@ func (rs *Watcher) watcher(ctx context.Context, sub event.Subscription, blocks c
 						time.Sleep(1 * time.Second)
 						goto retry
 					} else {
-						panic(err)
+						rs.log.Error().Err(err).Msg("dropped-a-block-retried-5x")
 					}
 				} else {
-					panic(err) // if we can't read a block we cannot sync so bang!
+					// if we can't read a block we cannot sync, but if we panic we crash arggg
+					rs.log.Error().Err(err).Msg("dropped-a-block-this-could-be-bad")
 				}
 			}
 		case <-ctx.Done():
@@ -230,11 +236,26 @@ func (rs *Watcher) SetNotificationsEnabled(enable bool) {
 	rs.config.NotificationsEnabled = enable
 }
 
-func (rs *Watcher) Notify(blockNumber int64) {
+func (rs *Watcher) Notify(batch *LogBatch) {
+	b, err := json.Marshal(batch.Logs)
+	if err != nil {
+		rs.log.Error().Err(err).Msg("serialize-block")
+		return
+	}
+	rs.config.Notifications <- &model.BlockEvent{
+		ID:        fmt.Sprintf("block-%d", batch.ToBlock),
+		Block:     int(batch.ToBlock),
+		Simulated: rs.config.Simulated,
+		Logs:      string(b),
+	}
+}
+
+func (rs *Watcher) NotifyFullSync(blockNumber int64) {
 	rs.config.Notifications <- &model.BlockEvent{
 		ID:        fmt.Sprintf("block-%d", blockNumber),
 		Block:     int(blockNumber),
 		Simulated: rs.config.Simulated,
+		Resync:    true,
 	}
 }
 
@@ -246,7 +267,7 @@ func (rs *Watcher) publisher(ctx context.Context) {
 				sub <- logs
 			}
 			if rs.config.NotificationsEnabled {
-				rs.Notify(logs.ToBlock)
+				rs.Notify(logs)
 			}
 		case <-ctx.Done():
 			return

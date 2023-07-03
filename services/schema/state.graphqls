@@ -83,6 +83,11 @@ type State {
 	node returns the first node that mates the Match filter.
 	"""
 	node(match: Match): Node @goField(forceResolver: true)
+
+	"""
+	dump a serialized version of the entire graph
+	"""
+	json: String! @goField(forceResolver: true)
 }
 
 type Node {

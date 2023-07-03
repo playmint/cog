@@ -1,6 +1,7 @@
 package model
 
 import (
+	"encoding/json"
 	"fmt"
 	"math/big"
 	"strings"
@@ -28,86 +29,230 @@ const (
 	CompoundKeyKindString
 )
 
-type Graph struct {
-	// cache of which nodes we have seen edges between
-	nodes *immutable.Map[string, bool]
+type SerializableGraph struct {
+	// cache of which Nodes we have seen edges between
+	Nodes map[string]bool
 	// nodeID => relID => relKey => EdgeData
-	edges *immutable.Map[string, *DirectedEdge]
+	Edges map[string]*DirectedEdge
 	// mapping of relID => friendly name
-	rels *immutable.Map[string, *state.StateEdgeTypeRegister]
+	Rels map[string]*state.StateEdgeTypeRegister
 	// mapping of kindID => friendly name
-	kinds *immutable.Map[string, *state.StateNodeTypeRegister]
+	Kinds map[string]*state.StateNodeTypeRegister
 	// nodeID => label => annotationRef
-	labels *immutable.Map[string, *immutable.Map[string, string]]
+	Labels map[string]map[string]string
 	// annotationRef => data
-	ann *immutable.Map[string, string]
-	// block is the last seen update to the graph
-	block uint64
+	Ann map[string]string
+	// Block is the last seen update to the graph
+	Block uint64
+}
+
+type Graph struct {
+	// cache of which Nodes we have seen edges between
+	Nodes *immutable.Map[string, bool]
+	// nodeID => relID => relKey => EdgeData
+	Edges *immutable.Map[string, *DirectedEdge]
+	// mapping of relID => friendly name
+	Rels *immutable.Map[string, *state.StateEdgeTypeRegister]
+	// mapping of kindID => friendly name
+	Kinds *immutable.Map[string, *state.StateNodeTypeRegister]
+	// nodeID => label => annotationRef
+	Labels *immutable.Map[string, *immutable.Map[string, string]]
+	// annotationRef => data
+	Ann *immutable.Map[string, string]
+	// Block is the last seen update to the graph
+	Block uint64
+
+	directedEdgeCache map[string][]*Edge
 }
 
 func NewGraph(block uint64) *Graph {
 	return &Graph{
-		nodes:  immutable.NewMap[string, bool](nil),
-		edges:  immutable.NewMap[string, *DirectedEdge](nil),
-		rels:   immutable.NewMap[string, *state.StateEdgeTypeRegister](nil),
-		kinds:  immutable.NewMap[string, *state.StateNodeTypeRegister](nil),
-		labels: immutable.NewMap[string, *immutable.Map[string, string]](nil),
-		ann:    immutable.NewMap[string, string](nil),
-		block:  block,
+		Nodes:             immutable.NewMap[string, bool](nil),
+		Edges:             immutable.NewMap[string, *DirectedEdge](nil),
+		Rels:              immutable.NewMap[string, *state.StateEdgeTypeRegister](nil),
+		Kinds:             immutable.NewMap[string, *state.StateNodeTypeRegister](nil),
+		Labels:            immutable.NewMap[string, *immutable.Map[string, string]](nil),
+		Ann:               immutable.NewMap[string, string](nil),
+		Block:             block,
+		directedEdgeCache: map[string][]*Edge{},
 	}
 }
 
+func (g *Graph) Dump() (string, error) {
+	sg := &SerializableGraph{
+		Nodes:  map[string]bool{},
+		Edges:  map[string]*DirectedEdge{},
+		Rels:   map[string]*state.StateEdgeTypeRegister{},
+		Kinds:  map[string]*state.StateNodeTypeRegister{},
+		Labels: map[string]map[string]string{},
+		Ann:    map[string]string{},
+		Block:  g.Block,
+	}
+
+	{
+		itr := g.Nodes.Iterator()
+		for !itr.Done() {
+			k, v, ok := itr.Next()
+			if !ok {
+				continue
+			}
+			sg.Nodes[k] = v
+		}
+	}
+
+	{
+		itr := g.Edges.Iterator()
+		for !itr.Done() {
+			k, v, ok := itr.Next()
+			if !ok {
+				continue
+			}
+			sg.Edges[k] = v
+		}
+	}
+
+	{
+		itr := g.Rels.Iterator()
+		for !itr.Done() {
+			k, v, ok := itr.Next()
+			if !ok {
+				continue
+			}
+			sg.Rels[k] = v
+		}
+	}
+
+	{
+		itr := g.Kinds.Iterator()
+		for !itr.Done() {
+			k, v, ok := itr.Next()
+			if !ok {
+				continue
+			}
+			sg.Kinds[k] = v
+		}
+	}
+
+	{
+		itr := g.Labels.Iterator()
+		for !itr.Done() {
+			k1, v1, ok := itr.Next()
+			if !ok {
+				continue
+			}
+			sg.Labels[k1] = map[string]string{}
+			itr2 := v1.Iterator()
+			for !itr2.Done() {
+				k2, v2, ok := itr2.Next()
+				if !ok {
+					continue
+				}
+				sg.Labels[k1][k2] = v2
+			}
+		}
+	}
+
+	{
+		itr := g.Ann.Iterator()
+		for !itr.Done() {
+			k, v, ok := itr.Next()
+			if !ok {
+				continue
+			}
+			sg.Ann[k] = v
+		}
+	}
+
+	b, err := json.Marshal(sg)
+	if err != nil {
+		return "", err
+	}
+	return string(b), nil
+}
+
+func LoadGraph(sg *SerializableGraph) (*Graph, error) {
+	g := NewGraph(sg.Block)
+	for k, v := range sg.Nodes {
+		g.Nodes = g.Nodes.Set(k, v)
+	}
+	for k, v := range sg.Edges {
+		g.Edges = g.Edges.Set(k, v)
+	}
+	for k, v := range sg.Rels {
+		g.Rels = g.Rels.Set(k, v)
+	}
+	for k, v := range sg.Kinds {
+		g.Kinds = g.Kinds.Set(k, v)
+	}
+	for k1, v1 := range sg.Labels {
+		label := immutable.NewMap[string, string](nil)
+		for k2, v2 := range v1 {
+			label = label.Set(k2, v2)
+		}
+		g.Labels = g.Labels.Set(k1, label)
+
+	}
+	for k, v := range sg.Ann {
+		g.Ann = g.Ann.Set(k, v)
+	}
+	g.updateDirectEdgeCache()
+	return g, nil
+}
+
 func (g *Graph) BlockNumber() uint64 {
-	return g.block
+	return g.Block
 }
 
 func (g *Graph) SetRelData(relData *state.StateEdgeTypeRegister) *Graph {
 	return &Graph{
-		nodes:  g.nodes,
-		edges:  g.edges,
-		rels:   g.rels.Set(hexutil.Encode(relData.Id[:]), relData),
-		kinds:  g.kinds,
-		labels: g.labels,
-		ann:    g.ann,
-		block:  g.block,
+		Nodes:             g.Nodes,
+		Edges:             g.Edges,
+		Rels:              g.Rels.Set(hexutil.Encode(relData.Id[:]), relData),
+		Kinds:             g.Kinds,
+		Labels:            g.Labels,
+		Ann:               g.Ann,
+		Block:             g.Block,
+		directedEdgeCache: g.directedEdgeCache,
 	}
 }
 
 func (g *Graph) SetKindData(kindData *state.StateNodeTypeRegister) *Graph {
 	return &Graph{
-		nodes:  g.nodes,
-		edges:  g.edges,
-		rels:   g.rels,
-		kinds:  g.kinds.Set(hexutil.Encode(kindData.Id[:]), kindData),
-		labels: g.labels,
-		ann:    g.ann,
-		block:  g.block,
+		Nodes:             g.Nodes,
+		Edges:             g.Edges,
+		Rels:              g.Rels,
+		Kinds:             g.Kinds.Set(hexutil.Encode(kindData.Id[:]), kindData),
+		Labels:            g.Labels,
+		Ann:               g.Ann,
+		Block:             g.Block,
+		directedEdgeCache: g.directedEdgeCache,
 	}
 }
 
 func (g *Graph) SetAnnotationData(nodeID string, label string, ref string, data string, block uint64) *Graph {
 	// update ann data
-	ann := g.ann.Set(ref, data)
+	ann := g.Ann.Set(ref, data)
 	// update the label data
-	labels, ok := g.labels.Get(nodeID)
+	labels, ok := g.Labels.Get(nodeID)
 	if !ok {
 		labels = immutable.NewMap[string, string](nil)
 	}
 	labels = labels.Set(label, ref)
 
 	// update the node data to mark the seen nodes
-	nodes := g.nodes
+	nodes := g.Nodes
 	nodes = nodes.Set(nodeID, true)
 
 	// build our new graph
 	newGraph := &Graph{
-		nodes:  nodes,
-		edges:  g.edges,
-		rels:   g.rels,
-		kinds:  g.kinds,
-		labels: g.labels.Set(nodeID, labels),
-		ann:    ann,
-		block:  block,
+		Nodes:             nodes,
+		Edges:             g.Edges,
+		Rels:              g.Rels,
+		Kinds:             g.Kinds,
+		Labels:            g.Labels.Set(nodeID, labels),
+		Ann:               ann,
+		Block:             block,
+		directedEdgeCache: g.directedEdgeCache,
 	}
 
 	return newGraph
@@ -116,31 +261,34 @@ func (g *Graph) SetAnnotationData(nodeID string, label string, ref string, data 
 func (g *Graph) SetEdge(relID string, relKey uint8, srcNodeID string, dstNodeID string, weight *big.Int, block uint64) *Graph {
 
 	e := &DirectedEdge{
-		from:   srcNodeID,
-		to:     dstNodeID,
-		weight: weight,
-		key:    relKey,
-		rel:    relID,
+		From:   srcNodeID,
+		To:     dstNodeID,
+		Weight: weight,
+		Key:    relKey,
+		Rel:    relID,
 	}
 
 	// set the edge going in both directions
-	edges := g.edges.Set(e.ID(), e)
+	edges := g.Edges.Set(e.ID(), e)
 
 	// update the node data to mark the seen nodes
-	nodes := g.nodes
+	nodes := g.Nodes
 	nodes = nodes.Set(srcNodeID, true)
 	nodes = nodes.Set(dstNodeID, true)
 
 	// build our new graph
 	newGraph := &Graph{
-		nodes:  nodes,
-		edges:  edges,
-		rels:   g.rels,
-		kinds:  g.kinds,
-		labels: g.labels,
-		ann:    g.ann,
-		block:  block,
+		Nodes:             nodes,
+		Edges:             edges,
+		Rels:              g.Rels,
+		Kinds:             g.Kinds,
+		Labels:            g.Labels,
+		Ann:               g.Ann,
+		Block:             block,
+		directedEdgeCache: map[string][]*Edge{},
 	}
+
+	newGraph.updateDirectEdgeCache()
 
 	return newGraph
 }
@@ -149,30 +297,33 @@ func (g *Graph) RemoveEdge(relID string, relKey uint8, srcNodeID string, block u
 
 	// remove edge
 	e := &DirectedEdge{
-		from: srcNodeID,
-		rel:  relID,
-		key:  relKey,
+		From: srcNodeID,
+		Rel:  relID,
+		Key:  relKey,
 	}
-	edges := g.edges.Delete(e.ID())
+	edges := g.Edges.Delete(e.ID())
 
 	// TODO: should we remove nodes from the node list that have no edges connected?
 
 	// build our new graph
 	newGraph := &Graph{
-		nodes:  g.nodes,
-		edges:  edges,
-		rels:   g.rels,
-		kinds:  g.kinds,
-		labels: g.labels,
-		ann:    g.ann,
-		block:  block,
+		Nodes:             g.Nodes,
+		Edges:             edges,
+		Rels:              g.Rels,
+		Kinds:             g.Kinds,
+		Labels:            g.Labels,
+		Ann:               g.Ann,
+		Block:             block,
+		directedEdgeCache: map[string][]*Edge{},
 	}
+
+	newGraph.updateDirectEdgeCache()
 
 	return newGraph
 }
 
 func (g *Graph) GetRelByName(relName string) string {
-	itr := g.rels.Iterator()
+	itr := g.Rels.Iterator()
 	for !itr.Done() {
 		relID, relData, ok := itr.Next()
 		if !ok {
@@ -186,7 +337,7 @@ func (g *Graph) GetRelByName(relName string) string {
 }
 
 func (g *Graph) GetKindByName(kindName string) string {
-	itr := g.kinds.Iterator()
+	itr := g.Kinds.Iterator()
 	for !itr.Done() {
 		kindID, kindData, ok := itr.Next()
 		if !ok {
@@ -220,13 +371,13 @@ func (g *Graph) GetNode(match *Match) *Node {
 }
 
 func (g *Graph) NodeExists(id string) bool {
-	_, exists := g.nodes.Get(id)
+	_, exists := g.Nodes.Get(id)
 	return exists
 }
 
 func (g *Graph) GetNodes(match *Match) []*Node {
 	nodes := []*Node{}
-	itr := g.nodes.Iterator()
+	itr := g.Nodes.Iterator()
 	for !itr.Done() {
 		id, _, exists := itr.Next()
 		if !exists {
@@ -239,6 +390,27 @@ func (g *Graph) GetNodes(match *Match) []*Node {
 		nodes = append(nodes, node)
 	}
 	return nodes
+}
+
+func (g *Graph) updateDirectEdgeCache() {
+	edgesItr := g.Edges.Iterator()
+	for !edgesItr.Done() {
+		_, e, exists := edgesItr.Next()
+		if !exists {
+			continue
+		}
+
+		g.directedEdgeCache[e.From] = append(g.directedEdgeCache[e.From], &Edge{
+			g:            g,
+			DirectedEdge: e,
+			Dir:          RelMatchDirectionOut,
+		})
+		g.directedEdgeCache[e.To] = append(g.directedEdgeCache[e.To], &Edge{
+			g:            g,
+			DirectedEdge: e,
+			Dir:          RelMatchDirectionIn,
+		})
+	}
 }
 
 type Node struct {
@@ -255,7 +427,7 @@ func (n *Node) Keys() ([]*big.Int, error) {
 	}
 	// find the compound key type
 	kindID := hexutil.Encode(id[:4])
-	kindData, ok := n.g.kinds.Get(kindID)
+	kindData, ok := n.g.Kinds.Get(kindID)
 	if !ok {
 		return nil, fmt.Errorf("keys: no kind type data for kind id %v", kindID)
 	}
@@ -304,7 +476,7 @@ func (n *Node) Annotation(name string) *Annotation {
 
 func (n *Node) Annotations() []*Annotation {
 	annotations := []*Annotation{}
-	labels, ok := n.g.labels.Get(n.ID)
+	labels, ok := n.g.Labels.Get(n.ID)
 	if !ok {
 		return annotations
 	}
@@ -314,7 +486,7 @@ func (n *Node) Annotations() []*Annotation {
 		if !ok {
 			continue
 		}
-		data, ok := n.g.ann.Get(annotationRef)
+		data, ok := n.g.Ann.Get(annotationRef)
 		if !ok {
 			continue
 		}
@@ -338,7 +510,7 @@ func (n *Node) Kind() string {
 		// FIXME: stop panicing here
 		panic(fmt.Sprintf("failed to decode node id: %v", err))
 	}
-	kindData, ok := n.g.kinds.Get(hexutil.Encode(kindID[:4]))
+	kindData, ok := n.g.Kinds.Get(hexutil.Encode(kindID[:4]))
 	if !ok {
 		return n.ID
 	}
@@ -361,7 +533,7 @@ func (n *Node) Sum(match *Match) (int, error) {
 	}
 	sum := 0
 	for _, edge := range edges {
-		sum += edge.Weight()
+		sum += edge.WeightInt()
 	}
 	return sum, nil
 }
@@ -374,7 +546,7 @@ func (n *Node) Value(match *Match) (*int, error) {
 	if edge == nil {
 		return nil, nil
 	}
-	w := edge.Weight()
+	w := edge.WeightInt()
 	return &w, nil
 }
 
@@ -424,26 +596,7 @@ func (n *Node) Edges(match *Match) ([]*Edge, error) {
 func (n *Node) getDirectEdges(match *Match) []*Edge {
 	result := []*Edge{}
 
-	edgesItr := n.g.edges.Iterator()
-	for !edgesItr.Done() {
-		_, directedEdge, exists := edgesItr.Next()
-		if !exists {
-			continue
-		}
-		edge := &Edge{
-			g:            n.g,
-			DirectedEdge: directedEdge,
-		}
-		if edge.from == n.ID {
-			// match normal
-			edge.Dir = RelMatchDirectionOut
-		} else if edge.to == n.ID {
-			// match reverse
-			edge.Dir = RelMatchDirectionIn
-		} else {
-			// no direct match
-			continue
-		}
+	for _, edge := range n.g.directedEdgeCache[n.ID] {
 		if !match.MatchEdge(edge) {
 			continue
 		}
@@ -484,49 +637,49 @@ type Edge struct {
 
 func (e *Edge) Node() *Node {
 	if e.Dir == RelMatchDirectionOut {
-		return e.g.get(e.to)
+		return e.g.get(e.To)
 	} else {
-		return e.g.get(e.from)
+		return e.g.get(e.From)
 	}
 }
 
 type DirectedEdge struct {
-	from   string
-	to     string
-	key    uint8
-	weight *big.Int
-	rel    string
+	From   string
+	To     string
+	Key    uint8
+	Weight *big.Int
+	Rel    string
 }
 
-func (e *Edge) Rel() string {
-	relData, ok := e.g.rels.Get(e.rel)
+func (e *Edge) RelString() string {
+	relData, ok := e.g.Rels.Get(e.Rel)
 	if !ok {
-		return e.rel
+		return e.Rel
 	}
 	return relData.Name
 }
 
 func (e *Edge) Src() *Node {
-	return e.g.get(e.from)
+	return e.g.get(e.From)
 }
 
 func (e *Edge) Dst() *Node {
-	return e.g.get(e.to)
+	return e.g.get(e.To)
 }
 
 func (e *DirectedEdge) ID() string {
-	return fmt.Sprintf("%s-%s-%d", e.from, e.rel, e.key)
+	return fmt.Sprintf("%s-%s-%d", e.From, e.Rel, e.Key)
 }
 
-func (e *DirectedEdge) Key() int {
-	return int(e.key)
+func (e *DirectedEdge) KeyInt() int {
+	return int(e.Key)
 }
 
-func (e *DirectedEdge) Weight() int {
-	if e.weight == nil {
+func (e *DirectedEdge) WeightInt() int {
+	if e.Weight == nil {
 		return 0
 	}
-	return int(e.weight.Uint64())
+	return int(e.Weight.Uint64())
 }
 
 func (match *Match) MatchNode(n *Node) bool {
@@ -578,8 +731,8 @@ func (match *Match) viaRels(e *Edge) bool {
 				dir = *(via.Dir)
 			}
 			numRels++
-			if matchRelID == e.rel &&
-				(via.Key == nil || *(via.Key) == e.Key()) &&
+			if matchRelID == e.Rel &&
+				(via.Key == nil || *(via.Key) == e.KeyInt()) &&
 				(dir == RelMatchDirectionBoth || dir == e.Dir) {
 				return true
 			}
