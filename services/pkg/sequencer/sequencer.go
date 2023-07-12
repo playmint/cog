@@ -256,14 +256,7 @@ func (seqr *MemorySequencer) commit(ctx context.Context) {
 				Str("batch", batch.ID).
 				Msg("commit")
 		}
-		// move the batch into the success pile
 		batch.Status = model.ActionTransactionStatusSuccess
-		successes, ok := seqr.success[batch.RouterAddress]
-		if !ok {
-			successes = []*model.ActionBatch{}
-		}
-		successes = append(successes, batch)
-		seqr.success[batch.RouterAddress] = successes
 		for _, tx := range batch.Transactions {
 			seqr.emitTx(tx)
 			seqr.log.Info().

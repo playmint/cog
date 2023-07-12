@@ -175,9 +175,38 @@ func (rs *StateStore) processBlock(ctx context.Context, block *eventwatcher.LogB
 		}
 		graphs = graphs.Set(rawEvent.Address.Hex(), g)
 	}
-	rs.graphs = rs.graphs.Set(uint64(block.ToBlock), graphs)
+	allGraphs := rs.graphs.Set(uint64(block.ToBlock), graphs)
+
+	// only keep last $maxKeep graphs
+	// [!] this can be removed once we persist data to disk, but it isn't
+	//     practical to keep history while using in-memory storage
+	maxKeep := uint64(250)
+	oldestToKeep := uint64(0)
+	if uint64(block.ToBlock) > maxKeep {
+		oldestToKeep = uint64(block.ToBlock) - maxKeep
+	}
+	itr := allGraphs.Iterator()
+	for !itr.Done() {
+		k, _, ok := itr.Next()
+		if !ok {
+			continue
+		}
+		if k == rs.latest {
+			continue
+		}
+		if k == uint64(block.ToBlock) {
+			continue
+		}
+		if k > oldestToKeep {
+			continue
+		}
+		allGraphs = allGraphs.Delete(k)
+	}
+
+	// switch to latest
+	rs.graphs = allGraphs
 	rs.latest = uint64(block.ToBlock)
-	rs.log.Warn().Msgf("latest now %d", rs.latest)
+	rs.log.Warn().Msgf("latest now %d historic=%d", rs.latest, allGraphs.Len())
 
 	wg, ok := rs.wg[uint64(block.ToBlock)]
 	if ok {
