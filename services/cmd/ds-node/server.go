@@ -52,6 +52,7 @@ func Main(ctx context.Context) error {
 		config.SequencerProviderHTTP,
 		config.SimulationProviderHTTP,
 		config.SimulationProviderWS,
+		config.SequencerMineEmpty,
 		idxr,
 	)
 	if err != nil {

@@ -69,13 +69,24 @@ type MemorySequencer struct {
 	simHttpClient     *alchemy.Client
 	simWsClient       *alchemy.Client
 	simBlock          uint64
+	mineEmpty         bool
 	notifications     chan interface{}
 	idxr              indexer.Indexer
 	log               zerolog.Logger
 	sync.RWMutex
 }
 
-func NewMemorySequencer(ctx context.Context, key *ecdsa.PrivateKey, notifications chan interface{}, chainProviderHTTP string, simProviderHTTP string, simProviderWS string, idxr indexer.Indexer) (*MemorySequencer, error) {
+func NewMemorySequencer(
+	ctx context.Context,
+	key *ecdsa.PrivateKey,
+	notifications chan interface{},
+	chainProviderHTTP string,
+	simProviderHTTP string,
+	simProviderWS string,
+	mineEmpty bool,
+	idxr indexer.Indexer,
+) (*MemorySequencer, error) {
+
 	var err error
 	seqr := &MemorySequencer{
 		PrivateKey:        key,
@@ -85,6 +96,7 @@ func NewMemorySequencer(ctx context.Context, key *ecdsa.PrivateKey, notification
 		simProviderHTTP:   simProviderHTTP,
 		simProviderWS:     simProviderWS,
 		chainProviderHTTP: chainProviderHTTP,
+		mineEmpty:         mineEmpty,
 	}
 	// setup an RPC client
 	seqr.chainHttpClient, err = alchemy.Dial(
@@ -213,7 +225,7 @@ func (seqr *MemorySequencer) commit(ctx context.Context) {
 		}
 		todo++
 	}
-	if todo == 0 {
+	if todo == 0 && seqr.mineEmpty {
 		if _, err := seqr.chainHttpClient.MineEmptyBlock(ctx); err != nil {
 			seqr.log.Error().
 				Err(err).
