@@ -359,8 +359,8 @@ func (seqr *MemorySequencer) commitTxWithClient(
 	}
 
 	txOpts.Context = ctx
-	txOpts.Value = big.NewInt(0)         // in wei
-	txOpts.GasLimit = uint64(3000000000) // in units
+	txOpts.Value = big.NewInt(0)      // in wei
+	txOpts.GasLimit = uint64(3000000) // in units
 
 	tx, err := sessionRouter.Dispatch(txOpts,
 		actions,
