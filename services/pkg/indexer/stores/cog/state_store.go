@@ -55,9 +55,10 @@ func (rs *StateStore) Fork(ctx context.Context, watcher *eventwatcher.Watcher, b
 			wg.Add(1)
 			rs.wg[blockNumber] = wg
 		}
-		rs.log.Warn().Uint64("block", blockNumber).Msg("fork-wait")
+		rs.log.Warn().Uint64("block", blockNumber).Msg("fork-wait-lock")
 		rs.Unlock()
 		wg.Wait()
+		rs.log.Warn().Uint64("block", blockNumber).Msg("fork-wait-released")
 	}
 
 	rs.Lock()
@@ -206,11 +207,12 @@ func (rs *StateStore) processBlock(ctx context.Context, block *eventwatcher.LogB
 	// switch to latest
 	rs.graphs = allGraphs
 	rs.latest = uint64(block.ToBlock)
-	rs.log.Warn().Msgf("latest now %d historic=%d", rs.latest, allGraphs.Len())
 
-	wg, ok := rs.wg[uint64(block.ToBlock)]
-	if ok {
-		wg.Done()
+	for block, wg := range rs.wg {
+		if rs.latest >= block {
+			wg.Done()
+			delete(rs.wg, block)
+		}
 	}
 }
 
