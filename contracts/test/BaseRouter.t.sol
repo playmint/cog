@@ -2,10 +2,11 @@
 pragma solidity ^0.8.13;
 
 import "forge-std/Test.sol";
-import {BaseDispatcher, Dispatcher, Rule, Context} from "../src/Dispatcher.sol";
-import {State} from "../src/State.sol";
-import {StateGraph} from "../src/StateGraph.sol";
-import {SessionRouter, PREFIX_MESSAGE, REVOKE_MESSAGE} from "../src/SessionRouter.sol";
+import {Dispatcher, Context} from "../src/IDispatcher.sol";
+import {State} from "../src/IState.sol";
+import {BaseState} from "../src/BaseState.sol";
+import {BaseDispatcher} from "../src/BaseDispatcher.sol";
+import {BaseRouter, PREFIX_MESSAGE, REVOKE_MESSAGE} from "../src/BaseRouter.sol";
 
 import "./fixtures/TestActions.sol";
 import "./fixtures/TestRules.sol";
@@ -25,10 +26,10 @@ contract ExampleDispatcher is Dispatcher, BaseDispatcher {
     }
 }
 
-contract SessionRouterTest is Test {
+contract BaseRouterTest is Test {
     State state;
     BaseDispatcher dispatcher;
-    SessionRouter router;
+    BaseRouter router;
 
     uint256 ownerKey = 0xA11CE;
     address ownerAddr = vm.addr(ownerKey);
@@ -40,9 +41,9 @@ contract SessionRouterTest is Test {
     address relayAddr = vm.addr(relayKey);
 
     function setUp() public {
-        state = new StateGraph(); // TODO: replace with a mock
+        state = new BaseState(); // TODO: replace with a mock
         dispatcher = new ExampleDispatcher(state);
-        router = new SessionRouter();
+        router = new BaseRouter();
         dispatcher.registerRouter(router);
     }
 

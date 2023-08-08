@@ -3,7 +3,7 @@ pragma solidity ^0.8.13;
 
 import "forge-std/Test.sol";
 
-import {State, CompoundKeyEncoder, CompoundKeyDecoder} from "../src/State.sol";
+import {State, CompoundKeyEncoder, CompoundKeyDecoder} from "../src/IState.sol";
 
 interface Kind {
     function Item() external;

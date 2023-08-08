@@ -1,28 +1,7 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.13;
 
-import {Dispatcher, Router, Rule} from "./Dispatcher.sol";
-import {SessionRouter} from "./SessionRouter.sol";
-import {State, StateGraph} from "./StateGraph.sol";
-
-struct GameMetadata {
-    string name;
-    string url;
-}
-// Game links together the State and Dispatcher that together
-//
-// TODO: this interface is too specific to playmint's setup
-//       which requires a SessionRouter, but not all games really
-//       require session routing so we should make this optional.
-
-interface Game {
-    event GameDeployed(address dispatcherAddr, address stateAddr, address routerAddr);
-
-    function getMetadata() external returns (GameMetadata memory);
-    function getDispatcher() external returns (Dispatcher);
-    function getRouter() external returns (Router);
-    function getState() external returns (State);
-}
+import "./IGame.sol";
 
 // BaseGame implements a basic shell for implementing Game
 abstract contract BaseGame is Game {

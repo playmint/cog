@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.13;
 
-import { BaseGame } from "cog/Game.sol";
-import { BaseDispatcher } from "cog/Dispatcher.sol";
-import { SessionRouter } from "cog/SessionRouter.sol";
-import { StateGraph, CompoundKeyKind, WeightKind } from "cog/StateGraph.sol";
+import { BaseGame } from "cog/IGame.sol";
+import { BaseDispatcher } from "cog/IDispatcher.sol";
+import { BaseRouter } from "cog/BaseRouter.sol";
+import { BaseState, CompoundKeyKind, WeightKind } from "cog/BaseState.sol";
 
 import { HarvestRule } from "src/rules/HarvestRule.sol";
 import { ScoutingRule } from "src/rules/ScoutingRule.sol";
@@ -12,7 +12,7 @@ import { ResetRule } from "src/rules/ResetRule.sol";
 import { MovementRule } from "src/rules/MovementRule.sol";
 import { SpawnSeekerRule } from "src/rules/SpawnSeekerRule.sol";
 
-import { SessionRouter } from "cog/SessionRouter.sol";
+import { BaseRouter } from "cog/BaseRouter.sol";
 import { Actions } from "src/actions/Actions.sol";
 import { Rel, Kind } from "src/schema/Schema.sol";
 
@@ -30,7 +30,7 @@ contract Game is BaseGame {
 
     constructor() BaseGame("CORNSEEKERS", "http://example.com") {
         // create a state
-        StateGraph state = new StateGraph();
+        BaseState state = new BaseState();
 
         // register the kind ids we are using
         state.registerNodeType(Kind.Seed.selector, "Seed", CompoundKeyKind.UINT160);
@@ -48,7 +48,7 @@ contract Game is BaseGame {
         state.registerEdgeType(Rel.ProvidesEntropyTo.selector, "ProvidesEntropyTo", WeightKind.UINT64);
 
         // create a session router
-        SessionRouter router = new SessionRouter();
+        BaseRouter router = new BaseRouter();
 
         // configure our dispatcher with state, rules and trust the router
         BaseDispatcher dispatcher = new BaseDispatcher();
@@ -70,7 +70,7 @@ contract Game is BaseGame {
         // dispatcher.dispatch(
         //     abi.encodeCall(Actions.RESET_MAP, ())
         // );
-        // SessionRouter(address(router)).authorizeAddr(dispatcher, 0, 0xffffffff, address(0x1));
+        // BaseRouter(address(router)).authorizeAddr(dispatcher, 0, 0xffffffff, address(0x1));
     }
 
 }

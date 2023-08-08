@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.13;
 
-import {State} from "src/State.sol";
+import {State} from "src/IState.sol";
 
 // some wrappers to treat State as a single value that you can set or get
 

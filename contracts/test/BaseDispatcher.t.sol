@@ -2,9 +2,11 @@
 pragma solidity ^0.8.13;
 
 import "forge-std/Test.sol";
-import {BaseDispatcher, Dispatcher, Router, DispatchUntrustedSender, Rule, Context} from "../src/Dispatcher.sol";
-import {State} from "../src/State.sol";
-import {StateGraph} from "../src/StateGraph.sol";
+import {Dispatcher, Context} from "../src/IDispatcher.sol";
+import {BaseDispatcher} from "../src/BaseDispatcher.sol";
+import {Router} from "../src/IRouter.sol";
+import {State} from "../src/IState.sol";
+import {BaseState} from "../src/BaseState.sol";
 
 import "./fixtures/TestActions.sol";
 import "./fixtures/TestRules.sol";
@@ -23,7 +25,7 @@ contract BaseDispatcherTest is Test {
     BaseDispatcher d;
 
     function setUp() public {
-        s = new StateGraph(); // TODO: replace with a mock
+        s = new BaseState(); // TODO: replace with a mock
         d = new ExampleDispatcher(s);
     }
 
@@ -81,7 +83,7 @@ contract BaseDispatcherTest is Test {
         bytes memory action = abi.encodeCall(TestActions.SET_SENDER, ());
 
         d.registerRule(new LogSenderRule());
-        vm.expectRevert(DispatchUntrustedSender.selector);
+        vm.expectRevert("DispatchUntrustedSender");
         vm.prank(router);
         d.dispatch(action, ctx);
 

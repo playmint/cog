@@ -2,19 +2,11 @@
 pragma solidity ^0.8.13;
 
 import "forge-std/Test.sol";
-import {
-    BaseDispatcher,
-    Dispatcher,
-    Router,
-    DispatchUntrustedSender,
-    Rule,
-    Context,
-    SCOPE_FULL_ACCESS
-} from "../src/Dispatcher.sol";
-import {State} from "../src/State.sol";
-import {StateGraph} from "../src/StateGraph.sol";
-import {Game, BaseGame, GameMetadata} from "../src/Game.sol";
-import {SessionRouter, MAX_TTL} from "../src/SessionRouter.sol";
+
+import "../src/BaseRouter.sol";
+import "../src/BaseState.sol";
+import "../src/BaseDispatcher.sol";
+import "../src/BaseGame.sol";
 
 import "./fixtures/TestActions.sol";
 import "./fixtures/TestRules.sol";
@@ -34,7 +26,7 @@ contract BaseGameTest is Test {
     event GameDeployed(address dispatcherAddr, address stateAddr, address routerAddr);
 
     Game game;
-    StateGraph state;
+    BaseState state;
 
     uint256 ownerKey = 0xA11CE;
     address ownerAddr = vm.addr(ownerKey);
@@ -46,8 +38,8 @@ contract BaseGameTest is Test {
     address relayAddr = vm.addr(relayKey);
 
     function setUp() public {
-        state = new StateGraph();
-        SessionRouter r = new SessionRouter();
+        state = new BaseState();
+        BaseRouter r = new BaseRouter();
         BaseDispatcher d = new BaseDispatcher();
         d.registerRouter(r);
         d.registerState(state);
