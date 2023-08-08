@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.13;
 
-import {State, WeightKind, CompoundKeyKind, AnnotationKind} from "./State.sol";
+import {State, WeightKind, CompoundKeyKind, AnnotationKind} from "./IState.sol";
 
 error StateUnauthorizedSender();
 
-contract StateGraph is State {
+contract BaseState is State {
     struct EdgeData {
         bytes24 dstNodeID;
         uint64 weight;

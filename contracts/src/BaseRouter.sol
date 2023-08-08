@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.13;
 
-import {State} from "./State.sol";
-import {Context, Router, Dispatcher} from "./Dispatcher.sol";
+import {State} from "./IState.sol";
+import {Context, Dispatcher} from "./IDispatcher.sol";
+import {Router} from "./IRouter.sol";
 
 import {LibString} from "../src/utils/LibString.sol";
 
@@ -15,7 +16,7 @@ bytes constant REVOKE_MESSAGE = "You are signing out of session: ";
 
 uint32 constant MAX_TTL = 40000;
 
-contract SessionRouter is Router {
+contract BaseRouter is Router {
     event SessionCreate(address session, address owner, uint32 exp, uint32 scopes);
 
     event SessionDestroy(address session);

@@ -23,15 +23,15 @@ pkg/api/resolver/resolver.go: schema/*.graphqls gqlgen.yml
 	go generate ./...
 	touch $@
 
-pkg/contracts/state/State.go: $(COG_CONTRACTS_DIR)/src/State.sol
+pkg/contracts/state/State.go: $(COG_CONTRACTS_DIR)/src/IState.sol
 	mkdir -p pkg/contracts/state
 	(cd $(COG_CONTRACTS_DIR) && forge inspect State abi) | abigen -abi - -pkg state -type State --out $@
 
-pkg/contracts/router/SessionRouter.go: $(COG_CONTRACTS_DIR)/src/SessionRouter.sol
+pkg/contracts/router/SessionRouter.go: $(COG_CONTRACTS_DIR)/src/BaseRouter.sol
 	mkdir -p pkg/contracts/router
-	(cd $(COG_CONTRACTS_DIR) && forge inspect SessionRouter abi) | abigen -abi - -pkg router -type SessionRouter --out $@
+	(cd $(COG_CONTRACTS_DIR) && forge inspect BaseRouter abi) | abigen -abi - -pkg router -type SessionRouter --out $@
 
-pkg/contracts/game/BaseGame.go: $(COG_CONTRACTS_DIR)/src/Game.sol
+pkg/contracts/game/BaseGame.go: $(COG_CONTRACTS_DIR)/src/IGame.sol
 	mkdir -p pkg/contracts/game
 	(cd $(COG_CONTRACTS_DIR) && forge inspect BaseGame abi) | abigen -abi - -pkg game -type BaseGame --out $@
 

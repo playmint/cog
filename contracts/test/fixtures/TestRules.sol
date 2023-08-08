@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.13;
 
-import {State, Rule, Context} from "../../src/Dispatcher.sol";
+import {Context} from "../../src/IDispatcher.sol";
+import {State} from "../../src/IState.sol";
+import {Rule} from "../../src/IRule.sol";
 import {TestActions} from "./TestActions.sol";
 
 import {StateTestUtils} from "./TestStateUtils.sol";

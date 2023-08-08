@@ -5,7 +5,7 @@ import {
     State,
     CompoundKeyEncoder,
     CompoundKeyDecoder
-} from "cog/State.sol";
+} from "cog/IState.sol";
 
 interface Rel {
     function Owner() external;

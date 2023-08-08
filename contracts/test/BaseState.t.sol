@@ -2,8 +2,8 @@
 pragma solidity ^0.8.13;
 
 import "forge-std/Test.sol";
-import {State, WeightKind, CompoundKeyKind, AnnotationKind} from "../src/State.sol";
-import {StateGraph} from "../src/StateGraph.sol";
+import {State, WeightKind, CompoundKeyKind, AnnotationKind} from "../src/IState.sol";
+import {BaseState} from "../src/BaseState.sol";
 
 interface Rel {
     function Friend() external;
@@ -13,17 +13,17 @@ interface Kind {
     function Person() external;
 }
 
-contract StateGraphTest is Test {
+contract BaseStateTest is Test {
     event EdgeTypeRegister(bytes4 id, string name, WeightKind kind);
     event NodeTypeRegister(bytes4 id, string name, CompoundKeyKind keyKind);
     event EdgeSet(bytes4 relID, uint8 relKey, bytes24 srcNodeID, bytes24 dstNodeID, uint160 weight);
     event EdgeRemove(bytes4 relID, uint8 relKey, bytes24 srcNodeID);
     event AnnotationSet(bytes24 id, AnnotationKind kind, string label, bytes32 ref, string data);
 
-    StateGraph internal state;
+    BaseState internal state;
 
     function setUp() public {
-        state = new StateGraph();
+        state = new BaseState();
     }
 
     function testSetEdge() public {
