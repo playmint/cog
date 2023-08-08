@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.13;
 
-import { Dispatcher } from "./IDispatcher.sol";
+import {Dispatcher} from "./IDispatcher.sol";
 
 // Routers accept "signed" bundles of Actions and forwards them to Dispatcher.dispatch
 // They might be a seperate contract or an extension of the Dispatcher
