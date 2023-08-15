@@ -6,6 +6,7 @@ import (
 	"os"
 	"strconv"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 )
 
@@ -15,6 +16,14 @@ func getRequiredEnvString(name string) string {
 		panic(fmt.Sprintf("required environment variable %s missing", name))
 	}
 	return v
+}
+
+func getOptionalEnvAddress(name string, defvalue common.Address) common.Address {
+	v := os.Getenv(name)
+	if v == "" {
+		return defvalue
+	}
+	return common.HexToAddress(v)
 }
 
 func getOptionalEnvInt(name string, defvalue int) int {
