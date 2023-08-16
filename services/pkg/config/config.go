@@ -1,10 +1,13 @@
 package config
 
+import "github.com/ethereum/go-ethereum/common"
+
 var IndexerProviderHTTP = getRequiredEnvString("INDEXER_PROVIDER_URL_HTTP")
 var IndexerProviderWS = getRequiredEnvString("INDEXER_PROVIDER_URL_WS")
 var IndexerMaxConcurrency = getOptionalEnvInt("INDEXER_MAX_CONCURRENCY", 200)
 var IndexerMaxLogRange = getOptionalEnvInt("INDEXER_MAX_LOG_RANGE", 1000)
 var IndexerWatchPending = getOptionalEnvBool("INDEXER_WATCH_PENDING", "true")
+var IndexerGameAddress = getOptionalEnvAddress("INDEXER_GAME_ADDRESS", common.Address{})
 
 var SequencerProviderHTTP = getRequiredEnvString("SEQUENCER_PROVIDER_URL_HTTP")
 var SequencerProviderWS = getRequiredEnvString("SEQUENCER_PROVIDER_URL_WS")

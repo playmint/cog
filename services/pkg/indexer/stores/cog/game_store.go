@@ -8,9 +8,11 @@ import (
 
 	"github.com/benbjohnson/immutable"
 	"github.com/ethereum/go-ethereum/accounts/abi"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/playmint/ds-node/pkg/api/model"
 	"github.com/playmint/ds-node/pkg/client/alchemy"
+	"github.com/playmint/ds-node/pkg/config"
 	"github.com/playmint/ds-node/pkg/contracts/game"
 	"github.com/playmint/ds-node/pkg/indexer/eventwatcher"
 	"github.com/rs/zerolog"
@@ -100,6 +102,13 @@ func (rs *GameStore) setGame(evt *game.BaseGameGameDeployed) error {
 	if evt.Raw.Removed {
 		// hmmm blockchain reorg occured so what do we do?
 		// just ignore for now, but this probably needs more thought
+		return nil
+	}
+
+	// if we are configured to only index a single game id
+	// then ignore any others
+	if config.IndexerGameAddress != common.HexToAddress("") && evt.Raw.Address != config.IndexerGameAddress {
+		rs.log.Warn().Msgf("ignoring game %s as we are configued to index %s only", evt.Raw.Address.Hex(), config.IndexerGameAddress.Hex())
 		return nil
 	}
 
