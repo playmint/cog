@@ -122,7 +122,7 @@ func (seqr *MemorySequencer) Enqueue(
 		Batch:         &model.ActionBatch{},
 	}
 
-	tx, err := seqr.dispatch(ctx, routerAddr, actionTx)
+	tx, err := seqr.dispatch(context.Background(), routerAddr, actionTx)
 	if err != nil {
 		seqr.log.Error().
 			Err(err).
@@ -183,7 +183,7 @@ func (seqr *MemorySequencer) dispatch(
 	if err != nil {
 		return nil, fmt.Errorf("failed commit batch tx: %v", err)
 	}
-	defer client.IncrementRelayNonce(ctx)
+	client.IncrementRelayNonce(ctx)
 	return tx, nil
 }
 
@@ -266,6 +266,14 @@ func (seqr *MemorySequencer) Signin(ctx context.Context, routerAddr common.Addre
 
 	tx, err := sessionRouter.AuthorizeAddr0(txOpts, dispatcherAddr, ttl, scopes, sessionKey, sig)
 	if err != nil {
+		seqr.log.Error().
+			Str("session", sessionKey.Hex()).
+			Uint32("ttl", ttl).
+			Uint32("scopes", scopes).
+			Str("dispatcher", dispatcherAddr.Hex()).
+			Str("router", routerAddr.Hex()).
+			Err(err).
+			Msg("signin-fail")
 		return fmt.Errorf("failed perform signin tx for session=%v: %v", sessionKey, err)
 	}
 	seqr.log.Info().
@@ -274,8 +282,8 @@ func (seqr *MemorySequencer) Signin(ctx context.Context, routerAddr common.Addre
 		Uint32("scopes", scopes).
 		Str("dispatcher", dispatcherAddr.Hex()).
 		Str("router", routerAddr.Hex()).
-		Msg("signin")
-	defer client.IncrementRelayNonce(ctx)
+		Msg("signin-ok")
+	client.IncrementRelayNonce(ctx)
 
 	// wait mined
 	maxWait, cancel := context.WithTimeout(ctx, 1*time.Minute)
