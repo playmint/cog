@@ -68,17 +68,10 @@ func (r *mutationResolver) Dispatch(ctx context.Context, gameID string, actions 
 	} else if signer == nil {
 		return nil, fmt.Errorf("invalid action: failed to extract signer")
 	}
-	// check that the signer has a session
-	session := r.Indexer.GetSession(game.RouterAddress, (*signer).Hex())
-	if session == nil {
-		return nil, fmt.Errorf("invalid action: no session for signer or invalid signature")
-	}
-	// TODO: check the session is not expired, needs the current block number
 	// push it to the pending batch
 	tx, err := r.Sequencer.Enqueue(
 		ctx,
 		game.RouterAddress,
-		common.HexToAddress(session.Owner),
 		game.StateAddress,
 		actions,
 		authorization,

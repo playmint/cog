@@ -31,7 +31,6 @@ type Sequencer interface {
 	Enqueue(
 		ctx context.Context,
 		routerAddress common.Address,
-		owner common.Address,
 		stateAddress common.Address,
 		actionPayload []string,
 		actionSig string,
@@ -104,9 +103,9 @@ func (seqr *MemorySequencer) emitTx(tx *model.ActionTransaction) {
 }
 
 // Enqueue dispatches and waits for action commit
-func (seqr *MemorySequencer) Enqueue(ctx context.Context,
+func (seqr *MemorySequencer) Enqueue(
+	ctx context.Context,
 	routerAddr common.Address,
-	ownerAddr common.Address,
 	stateAddr common.Address,
 	actionData []string,
 	actionSig string,
@@ -117,7 +116,6 @@ func (seqr *MemorySequencer) Enqueue(ctx context.Context,
 
 	actionTx := &model.ActionTransaction{
 		ID:            uuid.NewV4().String(),
-		Owner:         ownerAddr.Hex(),
 		Payload:       actionData,
 		Sig:           actionSig,
 		RouterAddress: routerAddr.Hex(),

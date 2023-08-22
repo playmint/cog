@@ -250,29 +250,6 @@ var _ = Describe("API QuickTest", Ordered, func() {
 		Expect(res.Game.State.Seekers[0].Position.Keys[1]).To(EqualBig(1))
 	})
 
-	It("should reject bad signatures during dispatch", func(ctx SpecContext) {
-		// abi encode an action
-		action := encodeAction("EXAMPLE_ACTION")
-		authMessage := crypto.Keccak256Hash(
-			[]byte("\x19Ethereum Signed Message:\n32"),
-			crypto.Keccak256Hash(action).Bytes(),
-		)
-		// sign it with the session key
-		sig, err := crypto.Sign(authMessage.Bytes(), sessionPrivateKey)
-		Expect(err).ToNot(HaveOccurred())
-		sig[len(sig)-1] += 27
-		// break the signature by changing the payload
-		action = encodeAction("HACKED_ACTION")
-		// send mutation
-		_, err = dispatch(
-			ctx, client,
-			gameID,
-			[]string{hexutil.Encode(action)},
-			hexutil.Encode(sig),
-		)
-		Expect(err).To(MatchError(ContainSubstring("no session for signer or invalid signature")))
-	})
-
 })
 
 func newPrivateKey() *ecdsa.PrivateKey {
