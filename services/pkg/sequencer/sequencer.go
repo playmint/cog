@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"math/big"
 	"strings"
-	"sync"
 	"time"
 
 	ethereum "github.com/ethereum/go-ethereum"
@@ -55,25 +54,12 @@ type Sequencer interface {
 var _ Sequencer = &MemorySequencer{}
 
 type MemorySequencer struct {
-	PrivateKey *ecdsa.PrivateKey
-	// pending/processing are actions, grouped by Router that are waiting to join a batch
-	pending    map[string]*model.ActionBatch
-	processing map[string]*model.ActionBatch
-	// batches are lists of actions, grouped by Router has processed
-	success           map[string][]*model.ActionBatch
-	failure           map[string][]*model.ActionBatch
+	PrivateKey        *ecdsa.PrivateKey
 	chainProviderHTTP string
 	chainHttpClient   *alchemy.Client
-	simProviderHTTP   string
-	simProviderWS     string
-	simHttpClient     *alchemy.Client
-	simWsClient       *alchemy.Client
-	simBlock          uint64
-	mineEmpty         bool
 	notifications     chan interface{}
 	idxr              indexer.Indexer
 	log               zerolog.Logger
-	sync.RWMutex
 }
 
 func NewMemorySequencer(
@@ -81,9 +67,6 @@ func NewMemorySequencer(
 	key *ecdsa.PrivateKey,
 	notifications chan interface{},
 	chainProviderHTTP string,
-	simProviderHTTP string,
-	simProviderWS string,
-	mineEmpty bool,
 	idxr indexer.Indexer,
 ) (*MemorySequencer, error) {
 
@@ -93,10 +76,7 @@ func NewMemorySequencer(
 		notifications:     notifications,
 		log:               log.With().Str("service", "sequencer").Logger(),
 		idxr:              idxr,
-		simProviderHTTP:   simProviderHTTP,
-		simProviderWS:     simProviderWS,
 		chainProviderHTTP: chainProviderHTTP,
-		mineEmpty:         mineEmpty,
 	}
 	// setup an RPC client
 	seqr.chainHttpClient, err = alchemy.Dial(
@@ -107,28 +87,6 @@ func NewMemorySequencer(
 	if err != nil {
 		return nil, err
 	}
-
-	// setup the queues and batches
-	seqr.pending = map[string]*model.ActionBatch{}
-	seqr.processing = map[string]*model.ActionBatch{}
-	seqr.success = map[string][]*model.ActionBatch{}
-	seqr.failure = map[string][]*model.ActionBatch{}
-
-	// drain the queue every few seconds
-	timer := time.NewTimer(time.Duration(60 * time.Second))
-	shutdown := ctx.Done()
-	go func() {
-		for {
-			select {
-			case <-timer.C:
-				seqr.commit(ctx)
-				timer.Reset(time.Duration(60 * time.Second))
-			case <-shutdown:
-				timer.Stop()
-				return
-			}
-		}
-	}()
 
 	return seqr, nil
 }
@@ -145,7 +103,7 @@ func (seqr *MemorySequencer) emitTx(tx *model.ActionTransaction) {
 	seqr.notifications <- tx
 }
 
-// Enqueue pushes the tx into the pending batch for the relevent Router
+// Enqueue dispatches and waits for action commit
 func (seqr *MemorySequencer) Enqueue(ctx context.Context,
 	routerAddr common.Address,
 	ownerAddr common.Address,
@@ -156,214 +114,47 @@ func (seqr *MemorySequencer) Enqueue(ctx context.Context,
 	if routerAddr.Hex() == "" || len(actionData) == 0 || actionSig == "" {
 		return nil, fmt.Errorf("invalid action data")
 	}
-	seqr.Lock()
-	defer seqr.Unlock()
 
-	actualPending, ok := seqr.pending[routerAddr.Hex()]
-	if !ok {
-		actualPending = &model.ActionBatch{
-			ID:            uuid.NewV4().String(),
-			Status:        model.ActionTransactionStatusPending,
-			RouterAddress: routerAddr.Hex(),
-		}
-	}
-
-	tx := &model.ActionTransaction{
+	actionTx := &model.ActionTransaction{
 		ID:            uuid.NewV4().String(),
 		Owner:         ownerAddr.Hex(),
 		Payload:       actionData,
 		Sig:           actionSig,
 		RouterAddress: routerAddr.Hex(),
-		Batch:         actualPending,
+		Batch:         &model.ActionBatch{},
 	}
 
-	if seqr.simHttpClient != nil && seqr.simBlock > 0 {
-		_, err := seqr.commitTxWithClient(ctx, routerAddr, tx, seqr.simHttpClient)
-		if err != nil {
-			seqr.log.Error().
-				Err(err).
-				Uint64("block", seqr.simBlock).
-				Str("batch", "sim").
-				Msg("sim-tx-fail")
-			return nil, err
-		}
-		seqr.log.Info().
-			Uint64("block", seqr.simBlock).
-			Str("batch", "sim").
-			Msg("sim-tx-ok")
-	} else {
-		seqr.log.Info().
-			Uint64("block", seqr.simBlock).
-			Str("batch", "sim").
-			Msg("sim-not-ready")
-	}
-
-	actualPending.Transactions = append(actualPending.Transactions, tx)
-	seqr.pending[routerAddr.Hex()] = actualPending
-	seqr.emitTx(tx)
-
-	seqr.log.Info().
-		Str("batch", actualPending.ID).
-		Str("tx", tx.ID).
-		Msg("queued")
-
-	return tx, nil
-}
-
-func (seqr *MemorySequencer) commit(ctx context.Context) {
-	seqr.Lock()
-	seqr.processing = seqr.pending
-	seqr.pending = map[string]*model.ActionBatch{}
-	seqr.Unlock()
-
-	todo := 0
-	for _, batch := range seqr.processing {
-		if len(batch.Transactions) == 0 {
-			continue
-		}
-		todo++
-	}
-	if todo == 0 && seqr.mineEmpty {
-		if _, err := seqr.chainHttpClient.MineEmptyBlock(ctx); err != nil {
-			seqr.log.Error().
-				Err(err).
-				Msg("mine-empty-block")
-		} else {
-			seqr.log.Info().
-				Msg("mine-empty-block")
-			if err != nil {
-				seqr.log.Error().
-					Err(err).
-					Msg("mine-empty-block-get-block")
-				return
-			}
-		}
-	}
-
-	var tx *types.Transaction
-	for routerAddr, batch := range seqr.processing {
-		if len(batch.Transactions) == 0 {
-			continue
-		}
-		for _, action := range batch.Transactions {
-			tx2, err := seqr.commitTxWithClient(ctx, common.HexToAddress(routerAddr), action, seqr.chainHttpClient)
-			if err != nil {
-				seqr.log.Error().
-					Err(err).
-					Str("batch", batch.ID).
-					Str("hash", tx.Hash().Hex()).
-					Msg("commit-fail")
-			} else {
-				tx = tx2
-				seqr.log.Info().
-					Str("batch", batch.ID).
-					Str("hash", tx.Hash().Hex()).
-					Msg("commited")
-			}
-		}
-		// batch.Status = model.ActionTransactionStatusSuccess
-		// for _, action := range batch.Transactions {
-		// 	seqr.emitTx(action)
-		// 	seqr.log.Info().
-		// 		Str("batch", batch.ID).
-		// 		Str("tx", action.ID).
-		// 		Str("status", string(batch.Status)).
-		// 		Msg("processed")
-		// }
-	}
-	if tx != nil {
-		_, err := WaitMined(ctx, seqr.chainHttpClient, tx)
-		if err != nil {
-			seqr.log.Error().
-				Err(err).
-				Str("hash", tx.Hash().Hex()).
-				Msg("commit-wait-fail")
-		}
-	}
-
-	seqr.Lock()
-	seqr.processing = map[string]*model.ActionBatch{}
-	latestBlock, _ := seqr.chainHttpClient.BlockNumber(ctx)
-	seqr.simBlock = latestBlock
-	if err := seqr.resetSim(ctx, seqr.simBlock); err != nil {
+	tx, err := seqr.dispatch(ctx, routerAddr, actionTx)
+	if err != nil {
 		seqr.log.Error().
 			Err(err).
-			Uint64("block", seqr.simBlock).
-			Msg("reset-sim-fail")
+			Msg("action-rejected")
+		return actionTx, err
 	}
-	seqr.Unlock()
-}
 
-func (seqr *MemorySequencer) resetSim(ctx context.Context, latest uint64) (err error) {
-	seqr.log.Info().Msg("dial-client")
-	// new simulation client
-	seqr.simHttpClient, err = alchemy.Dial(seqr.simProviderHTTP, 1, seqr.PrivateKey)
+	_, err = WaitMined(ctx, seqr.chainHttpClient, tx)
 	if err != nil {
-		return err
+		seqr.log.Error().
+			Err(err).
+			Str("hash", tx.Hash().Hex()).
+			Msg("action-fail")
+		return actionTx, err
 	}
-	seqr.simWsClient, err = alchemy.Dial(seqr.simProviderWS, 1, seqr.PrivateKey)
-	if err != nil {
-		return err
-	}
-	// fork sim chain
-	seqr.log.Info().Msg("sim-start-reset")
-	_, err = seqr.simHttpClient.Reset(ctx, seqr.chainProviderHTTP, latest)
-	if err != nil {
-		return err
-	}
-	seqr.log.Info().Msg("sim-enable-automine")
-	_, err = seqr.simHttpClient.EnableAutoMine(ctx)
-	if err != nil {
-		return err
-	}
-	// fork the simulated index
-	simxr, err := seqr.idxr.NewSim(ctx, seqr.simBlock, seqr.simHttpClient, seqr.simWsClient)
-	if err != nil {
-		return err
-	}
-	head := latest
-	// fast forward the pending queue
-	var tx *types.Transaction
-	for routerAddr, batch := range seqr.pending {
-		for _, action := range batch.Transactions {
-			tx2, err := seqr.commitTxWithClient(ctx, common.HexToAddress(routerAddr), action, seqr.simHttpClient)
-			if err != nil {
-				seqr.log.Warn().
-					Err(err).
-					Msg("sim-skipping-bad-pending")
-			} else {
-				tx = tx2
-			}
-		}
-	}
-	// wait for the last tx to get mine
-	if tx != nil {
-		rcpt, err := WaitMined(ctx, seqr.simHttpClient, tx)
-		if err != nil {
-			seqr.log.Error().
-				Err(err).
-				Msg("sim-wait-mined")
-		}
-		if rcpt.BlockNumber.Uint64() > head {
-			head = rcpt.BlockNumber.Uint64()
-		}
-	}
-	// hotswap the indexer
-	seqr.idxr.SetSim(simxr)
-	seqr.idxr.Notify(int64(head), true)
-	seqr.idxr.SetNotificationsEnabled(true, true)
+
 	seqr.log.Info().
-		Uint64("block", seqr.simBlock).
-		Msg("sim-reset-ok")
-	return nil
+		Str("hash", tx.Hash().Hex()).
+		Msg("action-commited")
+
+	return actionTx, nil
 }
 
-func (seqr *MemorySequencer) commitTxWithClient(
+func (seqr *MemorySequencer) dispatch(
 	ctx context.Context,
 	routerAddr common.Address,
 	action *model.ActionTransaction,
-	client *alchemy.Client,
 ) (*types.Transaction, error) {
+	// lock client
+	client := seqr.chainHttpClient
 	client.Lock()
 	defer client.Unlock()
 	// prep action data
@@ -383,8 +174,9 @@ func (seqr *MemorySequencer) commitTxWithClient(
 	}
 
 	txOpts.Context = ctx
-	txOpts.Value = big.NewInt(0)      // in wei
-	txOpts.GasLimit = uint64(3000000) // in units
+	txOpts.Value = big.NewInt(0)
+	txOpts.GasLimit = uint64(15000000)
+	txOpts.GasPrice = big.NewInt(1000000500)
 
 	tx, err := sessionRouter.Dispatch(txOpts,
 		actions,
@@ -500,96 +292,15 @@ func (seqr *MemorySequencer) Signin(ctx context.Context, routerAddr common.Addre
 		return fmt.Errorf("signin failed: %v", rcpt)
 	}
 
-	if rcpt.BlockNumber.Uint64() > seqr.simBlock {
-		seqr.Lock()
-		seqr.simBlock = rcpt.BlockNumber.Uint64()
-		if err := seqr.resetSim(ctx, seqr.simBlock); err != nil {
-			seqr.log.Error().
-				Err(err).
-				Uint64("block", seqr.simBlock).
-				Msg("reset-sim-fail")
-		}
-		seqr.Unlock()
-	}
-
 	return nil
 }
 
 func (seqr *MemorySequencer) GetBatch(routerAddr common.Address, id string) (*model.ActionBatch, error) {
-	r := routerAddr.Hex()
-
-	if batch, ok := seqr.pending[r]; ok {
-		if batch.ID == id {
-			return batch, nil
-		}
-	}
-	if batch, ok := seqr.processing[r]; ok {
-		if batch.ID == id {
-			return batch, nil
-		}
-	}
-	if batches, ok := seqr.success[r]; ok {
-		for _, batch := range batches {
-			if batch.ID == id {
-				return batch, nil
-			}
-		}
-	}
-	if batches, ok := seqr.failure[r]; ok {
-		for _, batch := range batches {
-			if batch.ID == id {
-				return batch, nil
-			}
-		}
-	}
 	return nil, nil
 }
 
 func (seqr *MemorySequencer) GetTransactions(routerAddr common.Address, owner *string, status []model.ActionTransactionStatus) ([]*model.ActionTransaction, error) {
-	seqr.RLock()
-	defer seqr.RUnlock()
-
 	txs := []*model.ActionTransaction{}
-
-	if len(status) == 0 || inStatusList(status, model.ActionTransactionStatusPending) {
-		for _, batch := range seqr.pending {
-			for _, tx := range batch.Transactions {
-				if owner == nil || *owner == tx.Owner {
-					txs = append(txs, tx)
-				}
-			}
-		}
-		for _, batch := range seqr.processing {
-			for _, tx := range batch.Transactions {
-				if owner == nil || *owner == tx.Owner {
-					txs = append(txs, tx)
-				}
-			}
-		}
-	}
-	if len(status) == 0 || inStatusList(status, model.ActionTransactionStatusSuccess) {
-		for _, batches := range seqr.success {
-			for _, batch := range batches {
-				for _, tx := range batch.Transactions {
-					if owner == nil || *owner == tx.Owner {
-						txs = append(txs, tx)
-					}
-				}
-			}
-		}
-	}
-	if len(status) == 0 || inStatusList(status, model.ActionTransactionStatusFailed) {
-		for _, batches := range seqr.failure {
-			for _, batch := range batches {
-				for _, tx := range batch.Transactions {
-					if owner == nil || *owner == tx.Owner {
-						txs = append(txs, tx)
-					}
-				}
-			}
-		}
-	}
-
 	return txs, nil
 }
 

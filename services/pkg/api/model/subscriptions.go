@@ -33,8 +33,7 @@ type StateEvent struct {
 }
 
 type StateEventSubscription struct {
-	Channel   chan Event
-	Simulated *bool
+	Channel chan Event
 }
 
 type Subscriptions struct {
@@ -64,9 +63,6 @@ func (subs *Subscriptions) Listen(ctx context.Context) {
 			case *BlockEvent:
 				for _, subs := range subs.Events {
 					for _, subscriber := range subs {
-						if subscriber.Simulated != nil && *subscriber.Simulated != obj.Simulated {
-							continue
-						}
 						select {
 						case subscriber.Channel <- obj:
 						default:
@@ -134,8 +130,7 @@ func (subs *Subscriptions) SubscribeStateEvent(ctx context.Context, stateID stri
 	}
 	events := make(chan Event, SubscriptionBuffer)
 	chans[id] = StateEventSubscription{
-		Channel:   events,
-		Simulated: simulated,
+		Channel: events,
 	}
 	subs.Events[stateID] = chans
 	subs.Unlock()

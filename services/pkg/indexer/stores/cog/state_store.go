@@ -2,7 +2,6 @@ package cog
 
 import (
 	"context"
-	"fmt"
 	"strings"
 	"sync"
 
@@ -39,40 +38,6 @@ func NewStateStore(ctx context.Context, watcher *eventwatcher.Watcher) (*StateSt
 	}
 	store.watch(ctx, watcher)
 	return store, nil
-}
-
-func (rs *StateStore) Fork(ctx context.Context, watcher *eventwatcher.Watcher, blockNumber uint64) *StateStore {
-	rs.Lock()
-	latest := rs.latest
-	rs.Unlock()
-
-	// wait til store contains blockNumber if we are behind
-	if latest < blockNumber {
-		rs.Lock()
-		wg, ok := rs.wg[blockNumber]
-		if !ok {
-			wg = &sync.WaitGroup{}
-			wg.Add(1)
-			rs.wg[blockNumber] = wg
-		}
-		rs.log.Warn().Uint64("block", blockNumber).Msg("fork-wait-lock")
-		rs.Unlock()
-		wg.Wait()
-		rs.log.Warn().Uint64("block", blockNumber).Msg("fork-wait-released")
-	}
-
-	rs.Lock()
-	defer rs.Unlock()
-
-	newStore := &StateStore{
-		graphs: rs.graphs,
-		wg:     map[uint64]*sync.WaitGroup{},
-		latest: blockNumber,
-		abi:    rs.abi,
-		log:    rs.log.With().Str("name", fmt.Sprintf("fork-%d", blockNumber)).Logger(),
-	}
-	newStore.watch(ctx, watcher)
-	return newStore
 }
 
 func (rs *StateStore) watch(ctx context.Context, watcher *eventwatcher.Watcher) {

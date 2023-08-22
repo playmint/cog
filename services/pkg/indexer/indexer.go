@@ -21,11 +21,6 @@ type Indexer interface {
 	GetGraph(stateContractAddr common.Address, block int, simulated bool) *model.Graph
 	GetSession(routerAddr common.Address, sessionID string) *model.Session
 	GetSessions(routerAddr common.Address, owner *string) []*model.Session
-	NewSim(ctx context.Context, blockNumber uint64, httpSimClient *alchemy.Client, wsSimClient *alchemy.Client) (*MemoryIndexer, error)
-	GetSim() *MemoryIndexer
-	SetSim(*MemoryIndexer)
-	Notify(blockNumber int64, simulated bool)
-	SetNotificationsEnabled(enabled bool, simulated bool)
 }
 
 var _ Indexer = &MemoryIndexer{}
@@ -39,7 +34,6 @@ type MemoryIndexer struct {
 	events        *eventwatcher.Watcher
 	httpClient    *alchemy.Client
 	wsClient      *alchemy.Client
-	sim           *MemoryIndexer
 }
 
 func NewMemoryIndexer(ctx context.Context, notifications chan interface{}, httpProviderURL string, wsProviderURL string) (*MemoryIndexer, error) {
@@ -114,64 +108,6 @@ func NewMemoryIndexer(ctx context.Context, notifications chan interface{}, httpP
 	return idxr, nil
 }
 
-func (idxr *MemoryIndexer) NewSim(ctx context.Context, blockNumber uint64, httpSimClient *alchemy.Client, wsSimClient *alchemy.Client) (*MemoryIndexer, error) {
-	if idxr.sim != nil {
-		idxr.sim.events.Stop()
-	}
-	events, err := eventwatcher.New(eventwatcher.Config{
-		HTTPClient:    httpSimClient,
-		Websocket:     wsSimClient,
-		LogRange:      config.IndexerMaxLogRange,
-		EpochBlock:    int64(blockNumber),
-		Simulated:     true,
-		Notifications: idxr.notifications,
-	})
-	if err != nil {
-		return nil, err
-	}
-	// clone this indexer
-	newIdxr := &MemoryIndexer{
-		configStore:   idxr.configStore,
-		gameStore:     idxr.gameStore,
-		stateStore:    idxr.stateStore.Fork(ctx, events, blockNumber),
-		sessionStore:  idxr.sessionStore,
-		notifications: idxr.notifications,
-		events:        events,
-		httpClient:    httpSimClient,
-		wsClient:      wsSimClient,
-	}
-	newIdxr.events.Start(ctx)
-	<-newIdxr.events.Ready()
-	return newIdxr, nil
-}
-
-func (idxr *MemoryIndexer) SetNotificationsEnabled(enabled bool, simulated bool) {
-	if simulated {
-		if idxr.sim != nil {
-			idxr.sim.events.SetNotificationsEnabled(enabled)
-		}
-	} else {
-		idxr.events.SetNotificationsEnabled(enabled)
-	}
-}
-func (idxr *MemoryIndexer) Notify(blockNumber int64, simulated bool) {
-	if simulated {
-		if idxr.sim != nil {
-			idxr.sim.events.Notify(blockNumber)
-		}
-	} else {
-		idxr.events.Notify(blockNumber)
-	}
-}
-
-func (idxr *MemoryIndexer) SetSim(sim *MemoryIndexer) {
-	idxr.sim = sim
-}
-
-func (idxr *MemoryIndexer) GetSim() *MemoryIndexer {
-	return idxr.sim
-}
-
 func (idxr *MemoryIndexer) Ready() chan struct{} {
 	return idxr.events.Ready()
 }
@@ -185,11 +121,7 @@ func (idxr *MemoryIndexer) GetGames() []*model.Game {
 }
 
 func (idxr *MemoryIndexer) GetGraph(stateContractAddr common.Address, block int, simulated bool) *model.Graph {
-	idx := idxr
-	if simulated && idxr.sim != nil {
-		idx = idxr.sim
-	}
-	return idx.stateStore.GetGraph(stateContractAddr, block)
+	return idxr.stateStore.GetGraph(stateContractAddr, block)
 }
 func (idxr *MemoryIndexer) GetSession(routerAddr common.Address, sessionID string) *model.Session {
 	return idxr.sessionStore.GetSession(routerAddr, sessionID)

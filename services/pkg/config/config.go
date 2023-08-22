@@ -16,7 +16,4 @@ var SequencerMaxConcurrency = getOptionalEnvInt("SEQUENCER_MAX_CONCURRENCY", 200
 var SequencerMinBatchDelayMilliseconds = getOptionalEnvInt("SEQUENCER_MIN_BATCH_DELAY_MS", 100)
 var SequencerMineEmpty = getOptionalEnvBool("SEQUENCER_MINE_EMPTY", "true")
 
-var SimulationProviderHTTP = getRequiredEnvString("SIMULATION_PROVIDER_URL_HTTP")
-var SimulationProviderWS = getRequiredEnvString("SIMULATION_PROVIDER_URL_WS")
-
 var APIPort = getOptionalEnvInt("API_PORT", 8080)

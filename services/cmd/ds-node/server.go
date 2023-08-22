@@ -50,9 +50,6 @@ func Main(ctx context.Context) error {
 		config.SequencerPrivateKey,
 		notifications,
 		config.SequencerProviderHTTP,
-		config.SimulationProviderHTTP,
-		config.SimulationProviderWS,
-		config.SequencerMineEmpty,
 		idxr,
 	)
 	if err != nil {
@@ -64,9 +61,6 @@ func Main(ctx context.Context) error {
 	log.Info().Str("service", "indexer").Msg("ready")
 	<-seqr.Ready()
 	log.Info().Str("service", "sequencer").Msg("ready")
-
-	// start broadcasting notifications
-	idxr.SetNotificationsEnabled(true, false)
 
 	// start graphql api server
 	api := api.Server{

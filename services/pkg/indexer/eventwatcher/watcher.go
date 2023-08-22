@@ -55,7 +55,7 @@ func New(cfg Config) (*Watcher, error) {
 		subscribers: []chan *LogBatch{},
 		ready:       make(chan struct{}),
 		config:      cfg,
-		log:         log.With().Str("service", "indexer").Str("component", "eventwatcher").Bool("simulated", cfg.Simulated).Logger(),
+		log:         log.With().Str("service", "indexer").Str("component", "eventwatcher").Bool("simulated", cfg.Simulated).Int64("epoch", cfg.EpochBlock).Logger(),
 	}, nil
 }
 
@@ -147,40 +147,43 @@ func (rs *Watcher) watch(ctx context.Context, query ethereum.FilterQuery) {
 	for {
 		select {
 		case <-ctx.Done():
+			rs.log.Info().Msg("done")
 			return
 		default:
+			if err := rs.subscribeHead(ctx, query); err != nil {
+				rs.log.Error().
+					Err(err).
+					Msg("subscribe-fail")
+				time.Sleep(time.Second * 2)
+			}
 		}
-		blocks := make(chan *types.Header, 32)
-		sub, err := rs.config.Websocket.SubscribeNewHead(ctx, blocks)
-		if err != nil {
-			rs.log.Error().
-				Err(err).
-				Msg("subscribe-fail")
-			time.Sleep(time.Second * 2)
-			continue
-		}
-		rs.watcher(ctx, sub, blocks, query)
 	}
 }
 
-func (rs *Watcher) watcher(ctx context.Context, sub event.Subscription, blocks chan *types.Header, query ethereum.FilterQuery) {
-	rs.log.Info().Msg("started")
-	defer rs.log.Info().Msg("stopped")
+func (rs *Watcher) subscribeHead(ctx context.Context, query ethereum.FilterQuery) error {
+	rs.log.Info().Msg("subscribed")
+	defer rs.log.Info().Msg("unsubscribed")
+	blocks := make(chan *types.Header, 32)
+	sub, err := rs.config.Websocket.SubscribeNewHead(context.Background(), blocks)
+	if err != nil {
+		return err
+	}
 	defer sub.Unsubscribe()
+	return rs.watcher(ctx, sub, blocks, query)
+}
+
+func (rs *Watcher) watcher(ctx context.Context, sub event.Subscription, blocks chan *types.Header, query ethereum.FilterQuery) error {
 	for {
 		select {
 		case err := <-sub.Err():
-			rs.log.Error().
-				Err(err).
-				Msg("watcher-sub-err")
-			return
+			return fmt.Errorf("suberr: %v", err)
 		case block := <-blocks:
 			rs.getBatchWithRetry(ctx, EventBatch{
-				FromBlock: block.Number.Int64() - 1,
+				FromBlock: block.Number.Int64(),
 				ToBlock:   block.Number.Int64(),
 			}, query)
 		case <-ctx.Done():
-			return
+			return nil
 		}
 	}
 }
@@ -204,7 +207,9 @@ func (rs *Watcher) publisher(ctx context.Context) {
 			for _, sub := range rs.subscribers {
 				sub <- logs
 			}
-			if rs.config.NotificationsEnabled {
+			// notify if logs collected or every 5 blocks
+			// TODO: make this configurable or move to client
+			if len(logs.Logs) > 0 || logs.ToBlock%5 == 0 {
 				rs.Notify(logs.ToBlock)
 			}
 		case <-ctx.Done():
