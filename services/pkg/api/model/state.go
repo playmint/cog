@@ -134,8 +134,10 @@ func (g *Graph) SetAnnotationData(nodeID string, label string, ref string, data 
 		labels:    g.labels.Set(nodeID, labels),
 		ann:       ann,
 		block:     block,
-		edgeCache: g.edgeCache,
+		edgeCache: map[string][]*Edge{},
 	}
+
+	newGraph.updateEdgeCache()
 
 	return newGraph
 }
