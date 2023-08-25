@@ -192,10 +192,11 @@ func (rs *Watcher) SetNotificationsEnabled(enable bool) {
 	rs.config.NotificationsEnabled = enable
 }
 
-func (rs *Watcher) Notify(blockNumber int64) {
+func (rs *Watcher) Notify(batch *LogBatch) {
 	rs.config.Notifications <- &model.BlockEvent{
-		ID:        fmt.Sprintf("block-%d", blockNumber),
-		Block:     int(blockNumber),
+		ID:        fmt.Sprintf("block-%d", batch.ToBlock),
+		Block:     int(batch.ToBlock),
+		Logs:      len(batch.Logs),
 		Simulated: rs.config.Simulated,
 	}
 }
@@ -207,11 +208,7 @@ func (rs *Watcher) publisher(ctx context.Context) {
 			for _, sub := range rs.subscribers {
 				sub <- logs
 			}
-			// notify if logs collected or every 5 blocks
-			// TODO: make this configurable or move to client
-			if len(logs.Logs) > 0 || logs.ToBlock%5 == 0 {
-				rs.Notify(logs.ToBlock)
-			}
+			rs.Notify(logs)
 		case <-ctx.Done():
 			return
 		}
@@ -224,7 +221,7 @@ func (rs *Watcher) Ready() chan struct{} {
 }
 
 func (rs *Watcher) SubscribeTopic(eventTypes []common.Hash) chan *LogBatch {
-	ch := make(chan *LogBatch, 1024)
+	ch := make(chan *LogBatch, 0)
 	rs.subscribers = append(rs.subscribers, ch)
 	for _, topic := range eventTypes {
 		rs.topic0 = append(rs.topic0, topic)

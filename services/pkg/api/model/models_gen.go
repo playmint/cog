@@ -33,6 +33,7 @@ type Annotation struct {
 type BlockEvent struct {
 	ID        string `json:"id"`
 	Block     int    `json:"block"`
+	Logs      int    `json:"logs"`
 	Simulated bool   `json:"simulated"`
 }
 
