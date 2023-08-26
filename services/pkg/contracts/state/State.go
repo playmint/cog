@@ -31,7 +31,7 @@ var (
 
 // StateMetaData contains all meta data concerning the State contract.
 var StateMetaData = &bind.MetaData{
-	ABI: "[{\"anonymous\":false,\"inputs\":[{\"indexed\":false,\"internalType\":\"bytes24\",\"name\":\"id\",\"type\":\"bytes24\"},{\"indexed\":false,\"internalType\":\"enumAnnotationKind\",\"name\":\"kind\",\"type\":\"uint8\"},{\"indexed\":false,\"internalType\":\"string\",\"name\":\"label\",\"type\":\"string\"},{\"indexed\":false,\"internalType\":\"bytes32\",\"name\":\"ref\",\"type\":\"bytes32\"},{\"indexed\":false,\"internalType\":\"string\",\"name\":\"data\",\"type\":\"string\"}],\"name\":\"AnnotationSet\",\"type\":\"event\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":false,\"internalType\":\"bytes4\",\"name\":\"relID\",\"type\":\"bytes4\"},{\"indexed\":false,\"internalType\":\"uint8\",\"name\":\"relKey\",\"type\":\"uint8\"},{\"indexed\":false,\"internalType\":\"bytes24\",\"name\":\"srcNodeID\",\"type\":\"bytes24\"}],\"name\":\"EdgeRemove\",\"type\":\"event\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":false,\"internalType\":\"bytes4\",\"name\":\"relID\",\"type\":\"bytes4\"},{\"indexed\":false,\"internalType\":\"uint8\",\"name\":\"relKey\",\"type\":\"uint8\"},{\"indexed\":false,\"internalType\":\"bytes24\",\"name\":\"srcNodeID\",\"type\":\"bytes24\"},{\"indexed\":false,\"internalType\":\"bytes24\",\"name\":\"dstNodeID\",\"type\":\"bytes24\"},{\"indexed\":false,\"internalType\":\"uint160\",\"name\":\"weight\",\"type\":\"uint160\"}],\"name\":\"EdgeSet\",\"type\":\"event\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":false,\"internalType\":\"bytes4\",\"name\":\"id\",\"type\":\"bytes4\"},{\"indexed\":false,\"internalType\":\"string\",\"name\":\"name\",\"type\":\"string\"},{\"indexed\":false,\"internalType\":\"enumWeightKind\",\"name\":\"kind\",\"type\":\"uint8\"}],\"name\":\"EdgeTypeRegister\",\"type\":\"event\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":false,\"internalType\":\"bytes4\",\"name\":\"id\",\"type\":\"bytes4\"},{\"indexed\":false,\"internalType\":\"string\",\"name\":\"name\",\"type\":\"string\"},{\"indexed\":false,\"internalType\":\"enumCompoundKeyKind\",\"name\":\"keyKind\",\"type\":\"uint8\"}],\"name\":\"NodeTypeRegister\",\"type\":\"event\"},{\"inputs\":[{\"internalType\":\"bytes24\",\"name\":\"nodeID\",\"type\":\"bytes24\"},{\"internalType\":\"string\",\"name\":\"label\",\"type\":\"string\"},{\"internalType\":\"string\",\"name\":\"annotationData\",\"type\":\"string\"}],\"name\":\"annotate\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"addr\",\"type\":\"address\"}],\"name\":\"authorizeContract\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"bytes4\",\"name\":\"relID\",\"type\":\"bytes4\"},{\"internalType\":\"uint8\",\"name\":\"relKey\",\"type\":\"uint8\"},{\"internalType\":\"bytes24\",\"name\":\"srcNodeID\",\"type\":\"bytes24\"}],\"name\":\"get\",\"outputs\":[{\"internalType\":\"bytes24\",\"name\":\"dstNodeId\",\"type\":\"bytes24\"},{\"internalType\":\"uint64\",\"name\":\"weight\",\"type\":\"uint64\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"bytes4\",\"name\":\"relID\",\"type\":\"bytes4\"},{\"internalType\":\"string\",\"name\":\"relName\",\"type\":\"string\"},{\"internalType\":\"enumWeightKind\",\"name\":\"weightKind\",\"type\":\"uint8\"}],\"name\":\"registerEdgeType\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"bytes4\",\"name\":\"kindID\",\"type\":\"bytes4\"},{\"internalType\":\"string\",\"name\":\"kindName\",\"type\":\"string\"},{\"internalType\":\"enumCompoundKeyKind\",\"name\":\"keyKind\",\"type\":\"uint8\"}],\"name\":\"registerNodeType\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"bytes4\",\"name\":\"relID\",\"type\":\"bytes4\"},{\"internalType\":\"uint8\",\"name\":\"relKey\",\"type\":\"uint8\"},{\"internalType\":\"bytes24\",\"name\":\"srcNodeID\",\"type\":\"bytes24\"}],\"name\":\"remove\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"bytes4\",\"name\":\"relID\",\"type\":\"bytes4\"},{\"internalType\":\"uint8\",\"name\":\"relKey\",\"type\":\"uint8\"},{\"internalType\":\"bytes24\",\"name\":\"srcNodeID\",\"type\":\"bytes24\"},{\"internalType\":\"bytes24\",\"name\":\"dstNodeID\",\"type\":\"bytes24\"},{\"internalType\":\"uint64\",\"name\":\"weight\",\"type\":\"uint64\"}],\"name\":\"set\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"}]",
+	ABI: "[{\"anonymous\":false,\"inputs\":[{\"indexed\":false,\"internalType\":\"bytes24\",\"name\":\"id\",\"type\":\"bytes24\"},{\"indexed\":false,\"internalType\":\"enumAnnotationKind\",\"name\":\"kind\",\"type\":\"uint8\"},{\"indexed\":false,\"internalType\":\"string\",\"name\":\"label\",\"type\":\"string\"},{\"indexed\":false,\"internalType\":\"bytes32\",\"name\":\"ref\",\"type\":\"bytes32\"},{\"indexed\":false,\"internalType\":\"string\",\"name\":\"data\",\"type\":\"string\"}],\"name\":\"AnnotationSet\",\"type\":\"event\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":false,\"internalType\":\"bytes4\",\"name\":\"relID\",\"type\":\"bytes4\"},{\"indexed\":false,\"internalType\":\"uint8\",\"name\":\"relKey\",\"type\":\"uint8\"},{\"indexed\":false,\"internalType\":\"bytes24\",\"name\":\"srcNodeID\",\"type\":\"bytes24\"}],\"name\":\"EdgeRemove\",\"type\":\"event\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":false,\"internalType\":\"bytes4\",\"name\":\"relID\",\"type\":\"bytes4\"},{\"indexed\":false,\"internalType\":\"uint8\",\"name\":\"relKey\",\"type\":\"uint8\"},{\"indexed\":false,\"internalType\":\"bytes24\",\"name\":\"srcNodeID\",\"type\":\"bytes24\"},{\"indexed\":false,\"internalType\":\"bytes24\",\"name\":\"dstNodeID\",\"type\":\"bytes24\"},{\"indexed\":false,\"internalType\":\"uint160\",\"name\":\"weight\",\"type\":\"uint160\"}],\"name\":\"EdgeSet\",\"type\":\"event\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":false,\"internalType\":\"bytes4\",\"name\":\"id\",\"type\":\"bytes4\"},{\"indexed\":false,\"internalType\":\"string\",\"name\":\"name\",\"type\":\"string\"},{\"indexed\":false,\"internalType\":\"enumWeightKind\",\"name\":\"kind\",\"type\":\"uint8\"}],\"name\":\"EdgeTypeRegister\",\"type\":\"event\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":false,\"internalType\":\"bytes4\",\"name\":\"id\",\"type\":\"bytes4\"},{\"indexed\":false,\"internalType\":\"string\",\"name\":\"name\",\"type\":\"string\"},{\"indexed\":false,\"internalType\":\"enumCompoundKeyKind\",\"name\":\"keyKind\",\"type\":\"uint8\"}],\"name\":\"NodeTypeRegister\",\"type\":\"event\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":false,\"internalType\":\"bytes\",\"name\":\"sig\",\"type\":\"bytes\"}],\"name\":\"SeenOpSet\",\"type\":\"event\"},{\"inputs\":[{\"internalType\":\"bytes24\",\"name\":\"nodeID\",\"type\":\"bytes24\"},{\"internalType\":\"string\",\"name\":\"label\",\"type\":\"string\"},{\"internalType\":\"string\",\"name\":\"annotationData\",\"type\":\"string\"}],\"name\":\"annotate\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"addr\",\"type\":\"address\"}],\"name\":\"authorizeContract\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"bytes4\",\"name\":\"relID\",\"type\":\"bytes4\"},{\"internalType\":\"uint8\",\"name\":\"relKey\",\"type\":\"uint8\"},{\"internalType\":\"bytes24\",\"name\":\"srcNodeID\",\"type\":\"bytes24\"}],\"name\":\"get\",\"outputs\":[{\"internalType\":\"bytes24\",\"name\":\"dstNodeId\",\"type\":\"bytes24\"},{\"internalType\":\"uint64\",\"name\":\"weight\",\"type\":\"uint64\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"bytes4\",\"name\":\"relID\",\"type\":\"bytes4\"},{\"internalType\":\"string\",\"name\":\"relName\",\"type\":\"string\"},{\"internalType\":\"enumWeightKind\",\"name\":\"weightKind\",\"type\":\"uint8\"}],\"name\":\"registerEdgeType\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"bytes4\",\"name\":\"kindID\",\"type\":\"bytes4\"},{\"internalType\":\"string\",\"name\":\"kindName\",\"type\":\"string\"},{\"internalType\":\"enumCompoundKeyKind\",\"name\":\"keyKind\",\"type\":\"uint8\"}],\"name\":\"registerNodeType\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"bytes4\",\"name\":\"relID\",\"type\":\"bytes4\"},{\"internalType\":\"uint8\",\"name\":\"relKey\",\"type\":\"uint8\"},{\"internalType\":\"bytes24\",\"name\":\"srcNodeID\",\"type\":\"bytes24\"}],\"name\":\"remove\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"bytes4\",\"name\":\"relID\",\"type\":\"bytes4\"},{\"internalType\":\"uint8\",\"name\":\"relKey\",\"type\":\"uint8\"},{\"internalType\":\"bytes24\",\"name\":\"srcNodeID\",\"type\":\"bytes24\"},{\"internalType\":\"bytes24\",\"name\":\"dstNodeID\",\"type\":\"bytes24\"},{\"internalType\":\"uint64\",\"name\":\"weight\",\"type\":\"uint64\"}],\"name\":\"set\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"}]",
 }
 
 // StateABI is the input ABI used to generate the binding from.
@@ -1029,6 +1029,140 @@ func (_State *StateFilterer) WatchNodeTypeRegister(opts *bind.WatchOpts, sink ch
 func (_State *StateFilterer) ParseNodeTypeRegister(log types.Log) (*StateNodeTypeRegister, error) {
 	event := new(StateNodeTypeRegister)
 	if err := _State.contract.UnpackLog(event, "NodeTypeRegister", log); err != nil {
+		return nil, err
+	}
+	event.Raw = log
+	return event, nil
+}
+
+// StateSeenOpSetIterator is returned from FilterSeenOpSet and is used to iterate over the raw logs and unpacked data for SeenOpSet events raised by the State contract.
+type StateSeenOpSetIterator struct {
+	Event *StateSeenOpSet // Event containing the contract specifics and raw log
+
+	contract *bind.BoundContract // Generic contract to use for unpacking event data
+	event    string              // Event name to use for unpacking event data
+
+	logs chan types.Log        // Log channel receiving the found contract events
+	sub  ethereum.Subscription // Subscription for errors, completion and termination
+	done bool                  // Whether the subscription completed delivering logs
+	fail error                 // Occurred error to stop iteration
+}
+
+// Next advances the iterator to the subsequent event, returning whether there
+// are any more events found. In case of a retrieval or parsing error, false is
+// returned and Error() can be queried for the exact failure.
+func (it *StateSeenOpSetIterator) Next() bool {
+	// If the iterator failed, stop iterating
+	if it.fail != nil {
+		return false
+	}
+	// If the iterator completed, deliver directly whatever's available
+	if it.done {
+		select {
+		case log := <-it.logs:
+			it.Event = new(StateSeenOpSet)
+			if err := it.contract.UnpackLog(it.Event, it.event, log); err != nil {
+				it.fail = err
+				return false
+			}
+			it.Event.Raw = log
+			return true
+
+		default:
+			return false
+		}
+	}
+	// Iterator still in progress, wait for either a data or an error event
+	select {
+	case log := <-it.logs:
+		it.Event = new(StateSeenOpSet)
+		if err := it.contract.UnpackLog(it.Event, it.event, log); err != nil {
+			it.fail = err
+			return false
+		}
+		it.Event.Raw = log
+		return true
+
+	case err := <-it.sub.Err():
+		it.done = true
+		it.fail = err
+		return it.Next()
+	}
+}
+
+// Error returns any retrieval or parsing error occurred during filtering.
+func (it *StateSeenOpSetIterator) Error() error {
+	return it.fail
+}
+
+// Close terminates the iteration process, releasing any pending underlying
+// resources.
+func (it *StateSeenOpSetIterator) Close() error {
+	it.sub.Unsubscribe()
+	return nil
+}
+
+// StateSeenOpSet represents a SeenOpSet event raised by the State contract.
+type StateSeenOpSet struct {
+	Sig []byte
+	Raw types.Log // Blockchain specific contextual infos
+}
+
+// FilterSeenOpSet is a free log retrieval operation binding the contract event 0xc7aa84a2bda9a04dfe50cbdf91bc9f9d2ad0e794a2dd16e7b575887109f77ca0.
+//
+// Solidity: event SeenOpSet(bytes sig)
+func (_State *StateFilterer) FilterSeenOpSet(opts *bind.FilterOpts) (*StateSeenOpSetIterator, error) {
+
+	logs, sub, err := _State.contract.FilterLogs(opts, "SeenOpSet")
+	if err != nil {
+		return nil, err
+	}
+	return &StateSeenOpSetIterator{contract: _State.contract, event: "SeenOpSet", logs: logs, sub: sub}, nil
+}
+
+// WatchSeenOpSet is a free log subscription operation binding the contract event 0xc7aa84a2bda9a04dfe50cbdf91bc9f9d2ad0e794a2dd16e7b575887109f77ca0.
+//
+// Solidity: event SeenOpSet(bytes sig)
+func (_State *StateFilterer) WatchSeenOpSet(opts *bind.WatchOpts, sink chan<- *StateSeenOpSet) (event.Subscription, error) {
+
+	logs, sub, err := _State.contract.WatchLogs(opts, "SeenOpSet")
+	if err != nil {
+		return nil, err
+	}
+	return event.NewSubscription(func(quit <-chan struct{}) error {
+		defer sub.Unsubscribe()
+		for {
+			select {
+			case log := <-logs:
+				// New log arrived, parse the event and forward to the user
+				event := new(StateSeenOpSet)
+				if err := _State.contract.UnpackLog(event, "SeenOpSet", log); err != nil {
+					return err
+				}
+				event.Raw = log
+
+				select {
+				case sink <- event:
+				case err := <-sub.Err():
+					return err
+				case <-quit:
+					return nil
+				}
+			case err := <-sub.Err():
+				return err
+			case <-quit:
+				return nil
+			}
+		}
+	}), nil
+}
+
+// ParseSeenOpSet is a log parse operation binding the contract event 0xc7aa84a2bda9a04dfe50cbdf91bc9f9d2ad0e794a2dd16e7b575887109f77ca0.
+//
+// Solidity: event SeenOpSet(bytes sig)
+func (_State *StateFilterer) ParseSeenOpSet(log types.Log) (*StateSeenOpSet, error) {
+	event := new(StateSeenOpSet)
+	if err := _State.contract.UnpackLog(event, "SeenOpSet", log); err != nil {
 		return nil, err
 	}
 	event.Raw = log

@@ -155,6 +155,6 @@ contract BaseRouterTest is Test {
         batchedSigs[0] = sig;
 
         vm.prank(relayAddr);
-        router.dispatch(batchedActions, batchedSigs);
+        router.dispatch(batchedActions[0], batchedSigs[0]);
     }
 }

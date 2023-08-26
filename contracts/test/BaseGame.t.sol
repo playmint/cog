@@ -80,7 +80,7 @@ contract BaseGameTest is Test {
 
         // dispatch the batch via a relayer
         vm.startPrank(relayAddr);
-        game.getRouter().dispatch(batchedActions, batchedSigs);
+        game.getRouter().dispatch(batchedActions[0], batchedSigs[0]);
         vm.stopPrank();
 
         // check that the state was modified as a reult of running

@@ -29,9 +29,21 @@ var (
 	_ = abi.ConvertType
 )
 
+// Op is an auto generated low-level Go binding around an user-defined struct.
+type Op struct {
+	Kind      uint8
+	RelID     [4]byte
+	RelKey    uint8
+	SrcNodeID [24]byte
+	DstNodeID [24]byte
+	Weight    *big.Int
+	AnnName   string
+	AnnData   string
+}
+
 // SessionRouterMetaData contains all meta data concerning the SessionRouter contract.
 var SessionRouterMetaData = &bind.MetaData{
-	ABI: "[{\"anonymous\":false,\"inputs\":[{\"indexed\":false,\"internalType\":\"address\",\"name\":\"session\",\"type\":\"address\"},{\"indexed\":false,\"internalType\":\"address\",\"name\":\"owner\",\"type\":\"address\"},{\"indexed\":false,\"internalType\":\"uint32\",\"name\":\"exp\",\"type\":\"uint32\"},{\"indexed\":false,\"internalType\":\"uint32\",\"name\":\"scopes\",\"type\":\"uint32\"}],\"name\":\"SessionCreate\",\"type\":\"event\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":false,\"internalType\":\"address\",\"name\":\"session\",\"type\":\"address\"}],\"name\":\"SessionDestroy\",\"type\":\"event\"},{\"inputs\":[{\"internalType\":\"contractDispatcher\",\"name\":\"dispatcher\",\"type\":\"address\"},{\"internalType\":\"uint32\",\"name\":\"ttl\",\"type\":\"uint32\"},{\"internalType\":\"uint32\",\"name\":\"scopes\",\"type\":\"uint32\"},{\"internalType\":\"address\",\"name\":\"sessionAddr\",\"type\":\"address\"}],\"name\":\"authorizeAddr\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"contractDispatcher\",\"name\":\"dispatcher\",\"type\":\"address\"},{\"internalType\":\"uint32\",\"name\":\"ttl\",\"type\":\"uint32\"},{\"internalType\":\"uint32\",\"name\":\"scopes\",\"type\":\"uint32\"},{\"internalType\":\"address\",\"name\":\"sessionAddr\",\"type\":\"address\"},{\"internalType\":\"bytes\",\"name\":\"sig\",\"type\":\"bytes\"}],\"name\":\"authorizeAddr\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"bytes[][]\",\"name\":\"actions\",\"type\":\"bytes[][]\"},{\"internalType\":\"bytes[]\",\"name\":\"sig\",\"type\":\"bytes[]\"}],\"name\":\"dispatch\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"addr\",\"type\":\"address\"},{\"internalType\":\"bytes\",\"name\":\"sig\",\"type\":\"bytes\"}],\"name\":\"revokeAddr\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"addr\",\"type\":\"address\"}],\"name\":\"revokeAddr\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"\",\"type\":\"address\"}],\"name\":\"sessions\",\"outputs\":[{\"internalType\":\"contractDispatcher\",\"name\":\"dispatcher\",\"type\":\"address\"},{\"internalType\":\"address\",\"name\":\"owner\",\"type\":\"address\"},{\"internalType\":\"uint32\",\"name\":\"exp\",\"type\":\"uint32\"},{\"internalType\":\"uint32\",\"name\":\"scopes\",\"type\":\"uint32\"}],\"stateMutability\":\"view\",\"type\":\"function\"}]",
+	ABI: "[{\"anonymous\":false,\"inputs\":[{\"indexed\":false,\"internalType\":\"bytes\",\"name\":\"sig\",\"type\":\"bytes\"}],\"name\":\"SeenOpSet\",\"type\":\"event\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":false,\"internalType\":\"address\",\"name\":\"session\",\"type\":\"address\"},{\"indexed\":false,\"internalType\":\"address\",\"name\":\"owner\",\"type\":\"address\"},{\"indexed\":false,\"internalType\":\"uint32\",\"name\":\"exp\",\"type\":\"uint32\"},{\"indexed\":false,\"internalType\":\"uint32\",\"name\":\"scopes\",\"type\":\"uint32\"}],\"name\":\"SessionCreate\",\"type\":\"event\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":false,\"internalType\":\"address\",\"name\":\"session\",\"type\":\"address\"}],\"name\":\"SessionDestroy\",\"type\":\"event\"},{\"inputs\":[{\"internalType\":\"contractDispatcher\",\"name\":\"dispatcher\",\"type\":\"address\"},{\"internalType\":\"uint32\",\"name\":\"ttl\",\"type\":\"uint32\"},{\"internalType\":\"uint32\",\"name\":\"scopes\",\"type\":\"uint32\"},{\"internalType\":\"address\",\"name\":\"sessionAddr\",\"type\":\"address\"}],\"name\":\"authorizeAddr\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"contractDispatcher\",\"name\":\"dispatcher\",\"type\":\"address\"},{\"internalType\":\"uint32\",\"name\":\"ttl\",\"type\":\"uint32\"},{\"internalType\":\"uint32\",\"name\":\"scopes\",\"type\":\"uint32\"},{\"internalType\":\"address\",\"name\":\"sessionAddr\",\"type\":\"address\"},{\"internalType\":\"bytes\",\"name\":\"sig\",\"type\":\"bytes\"}],\"name\":\"authorizeAddr\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"bytes[]\",\"name\":\"actions\",\"type\":\"bytes[]\"},{\"internalType\":\"bytes\",\"name\":\"sig\",\"type\":\"bytes\"}],\"name\":\"dispatch\",\"outputs\":[{\"components\":[{\"internalType\":\"enumOpKind\",\"name\":\"kind\",\"type\":\"uint8\"},{\"internalType\":\"bytes4\",\"name\":\"relID\",\"type\":\"bytes4\"},{\"internalType\":\"uint8\",\"name\":\"relKey\",\"type\":\"uint8\"},{\"internalType\":\"bytes24\",\"name\":\"srcNodeID\",\"type\":\"bytes24\"},{\"internalType\":\"bytes24\",\"name\":\"dstNodeID\",\"type\":\"bytes24\"},{\"internalType\":\"uint160\",\"name\":\"weight\",\"type\":\"uint160\"},{\"internalType\":\"string\",\"name\":\"annName\",\"type\":\"string\"},{\"internalType\":\"string\",\"name\":\"annData\",\"type\":\"string\"}],\"internalType\":\"structOp[]\",\"name\":\"\",\"type\":\"tuple[]\"}],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"addr\",\"type\":\"address\"},{\"internalType\":\"bytes\",\"name\":\"sig\",\"type\":\"bytes\"}],\"name\":\"revokeAddr\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"addr\",\"type\":\"address\"}],\"name\":\"revokeAddr\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"\",\"type\":\"address\"}],\"name\":\"sessions\",\"outputs\":[{\"internalType\":\"contractDispatcher\",\"name\":\"dispatcher\",\"type\":\"address\"},{\"internalType\":\"address\",\"name\":\"owner\",\"type\":\"address\"},{\"internalType\":\"uint32\",\"name\":\"exp\",\"type\":\"uint32\"},{\"internalType\":\"uint32\",\"name\":\"scopes\",\"type\":\"uint32\"}],\"stateMutability\":\"view\",\"type\":\"function\"}]",
 }
 
 // SessionRouterABI is the input ABI used to generate the binding from.
@@ -277,24 +289,24 @@ func (_SessionRouter *SessionRouterTransactorSession) AuthorizeAddr0(dispatcher 
 	return _SessionRouter.Contract.AuthorizeAddr0(&_SessionRouter.TransactOpts, dispatcher, ttl, scopes, sessionAddr, sig)
 }
 
-// Dispatch is a paid mutator transaction binding the contract method 0xd491289b.
+// Dispatch is a paid mutator transaction binding the contract method 0x26dd8115.
 //
-// Solidity: function dispatch(bytes[][] actions, bytes[] sig) returns()
-func (_SessionRouter *SessionRouterTransactor) Dispatch(opts *bind.TransactOpts, actions [][][]byte, sig [][]byte) (*types.Transaction, error) {
+// Solidity: function dispatch(bytes[] actions, bytes sig) returns((uint8,bytes4,uint8,bytes24,bytes24,uint160,string,string)[])
+func (_SessionRouter *SessionRouterTransactor) Dispatch(opts *bind.TransactOpts, actions [][]byte, sig []byte) (*types.Transaction, error) {
 	return _SessionRouter.contract.Transact(opts, "dispatch", actions, sig)
 }
 
-// Dispatch is a paid mutator transaction binding the contract method 0xd491289b.
+// Dispatch is a paid mutator transaction binding the contract method 0x26dd8115.
 //
-// Solidity: function dispatch(bytes[][] actions, bytes[] sig) returns()
-func (_SessionRouter *SessionRouterSession) Dispatch(actions [][][]byte, sig [][]byte) (*types.Transaction, error) {
+// Solidity: function dispatch(bytes[] actions, bytes sig) returns((uint8,bytes4,uint8,bytes24,bytes24,uint160,string,string)[])
+func (_SessionRouter *SessionRouterSession) Dispatch(actions [][]byte, sig []byte) (*types.Transaction, error) {
 	return _SessionRouter.Contract.Dispatch(&_SessionRouter.TransactOpts, actions, sig)
 }
 
-// Dispatch is a paid mutator transaction binding the contract method 0xd491289b.
+// Dispatch is a paid mutator transaction binding the contract method 0x26dd8115.
 //
-// Solidity: function dispatch(bytes[][] actions, bytes[] sig) returns()
-func (_SessionRouter *SessionRouterTransactorSession) Dispatch(actions [][][]byte, sig [][]byte) (*types.Transaction, error) {
+// Solidity: function dispatch(bytes[] actions, bytes sig) returns((uint8,bytes4,uint8,bytes24,bytes24,uint160,string,string)[])
+func (_SessionRouter *SessionRouterTransactorSession) Dispatch(actions [][]byte, sig []byte) (*types.Transaction, error) {
 	return _SessionRouter.Contract.Dispatch(&_SessionRouter.TransactOpts, actions, sig)
 }
 
@@ -338,6 +350,140 @@ func (_SessionRouter *SessionRouterSession) RevokeAddr0(addr common.Address) (*t
 // Solidity: function revokeAddr(address addr) returns()
 func (_SessionRouter *SessionRouterTransactorSession) RevokeAddr0(addr common.Address) (*types.Transaction, error) {
 	return _SessionRouter.Contract.RevokeAddr0(&_SessionRouter.TransactOpts, addr)
+}
+
+// SessionRouterSeenOpSetIterator is returned from FilterSeenOpSet and is used to iterate over the raw logs and unpacked data for SeenOpSet events raised by the SessionRouter contract.
+type SessionRouterSeenOpSetIterator struct {
+	Event *SessionRouterSeenOpSet // Event containing the contract specifics and raw log
+
+	contract *bind.BoundContract // Generic contract to use for unpacking event data
+	event    string              // Event name to use for unpacking event data
+
+	logs chan types.Log        // Log channel receiving the found contract events
+	sub  ethereum.Subscription // Subscription for errors, completion and termination
+	done bool                  // Whether the subscription completed delivering logs
+	fail error                 // Occurred error to stop iteration
+}
+
+// Next advances the iterator to the subsequent event, returning whether there
+// are any more events found. In case of a retrieval or parsing error, false is
+// returned and Error() can be queried for the exact failure.
+func (it *SessionRouterSeenOpSetIterator) Next() bool {
+	// If the iterator failed, stop iterating
+	if it.fail != nil {
+		return false
+	}
+	// If the iterator completed, deliver directly whatever's available
+	if it.done {
+		select {
+		case log := <-it.logs:
+			it.Event = new(SessionRouterSeenOpSet)
+			if err := it.contract.UnpackLog(it.Event, it.event, log); err != nil {
+				it.fail = err
+				return false
+			}
+			it.Event.Raw = log
+			return true
+
+		default:
+			return false
+		}
+	}
+	// Iterator still in progress, wait for either a data or an error event
+	select {
+	case log := <-it.logs:
+		it.Event = new(SessionRouterSeenOpSet)
+		if err := it.contract.UnpackLog(it.Event, it.event, log); err != nil {
+			it.fail = err
+			return false
+		}
+		it.Event.Raw = log
+		return true
+
+	case err := <-it.sub.Err():
+		it.done = true
+		it.fail = err
+		return it.Next()
+	}
+}
+
+// Error returns any retrieval or parsing error occurred during filtering.
+func (it *SessionRouterSeenOpSetIterator) Error() error {
+	return it.fail
+}
+
+// Close terminates the iteration process, releasing any pending underlying
+// resources.
+func (it *SessionRouterSeenOpSetIterator) Close() error {
+	it.sub.Unsubscribe()
+	return nil
+}
+
+// SessionRouterSeenOpSet represents a SeenOpSet event raised by the SessionRouter contract.
+type SessionRouterSeenOpSet struct {
+	Sig []byte
+	Raw types.Log // Blockchain specific contextual infos
+}
+
+// FilterSeenOpSet is a free log retrieval operation binding the contract event 0xc7aa84a2bda9a04dfe50cbdf91bc9f9d2ad0e794a2dd16e7b575887109f77ca0.
+//
+// Solidity: event SeenOpSet(bytes sig)
+func (_SessionRouter *SessionRouterFilterer) FilterSeenOpSet(opts *bind.FilterOpts) (*SessionRouterSeenOpSetIterator, error) {
+
+	logs, sub, err := _SessionRouter.contract.FilterLogs(opts, "SeenOpSet")
+	if err != nil {
+		return nil, err
+	}
+	return &SessionRouterSeenOpSetIterator{contract: _SessionRouter.contract, event: "SeenOpSet", logs: logs, sub: sub}, nil
+}
+
+// WatchSeenOpSet is a free log subscription operation binding the contract event 0xc7aa84a2bda9a04dfe50cbdf91bc9f9d2ad0e794a2dd16e7b575887109f77ca0.
+//
+// Solidity: event SeenOpSet(bytes sig)
+func (_SessionRouter *SessionRouterFilterer) WatchSeenOpSet(opts *bind.WatchOpts, sink chan<- *SessionRouterSeenOpSet) (event.Subscription, error) {
+
+	logs, sub, err := _SessionRouter.contract.WatchLogs(opts, "SeenOpSet")
+	if err != nil {
+		return nil, err
+	}
+	return event.NewSubscription(func(quit <-chan struct{}) error {
+		defer sub.Unsubscribe()
+		for {
+			select {
+			case log := <-logs:
+				// New log arrived, parse the event and forward to the user
+				event := new(SessionRouterSeenOpSet)
+				if err := _SessionRouter.contract.UnpackLog(event, "SeenOpSet", log); err != nil {
+					return err
+				}
+				event.Raw = log
+
+				select {
+				case sink <- event:
+				case err := <-sub.Err():
+					return err
+				case <-quit:
+					return nil
+				}
+			case err := <-sub.Err():
+				return err
+			case <-quit:
+				return nil
+			}
+		}
+	}), nil
+}
+
+// ParseSeenOpSet is a log parse operation binding the contract event 0xc7aa84a2bda9a04dfe50cbdf91bc9f9d2ad0e794a2dd16e7b575887109f77ca0.
+//
+// Solidity: event SeenOpSet(bytes sig)
+func (_SessionRouter *SessionRouterFilterer) ParseSeenOpSet(log types.Log) (*SessionRouterSeenOpSet, error) {
+	event := new(SessionRouterSeenOpSet)
+	if err := _SessionRouter.contract.UnpackLog(event, "SeenOpSet", log); err != nil {
+		return nil, err
+	}
+	event.Raw = log
+	return event, nil
 }
 
 // SessionRouterSessionCreateIterator is returned from FilterSessionCreate and is used to iterate over the raw logs and unpacked data for SessionCreate events raised by the SessionRouter contract.

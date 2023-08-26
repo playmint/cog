@@ -18,7 +18,9 @@ import (
 	"github.com/playmint/ds-node/pkg/api/model"
 	"github.com/playmint/ds-node/pkg/client/alchemy"
 	"github.com/playmint/ds-node/pkg/contracts/router"
+	"github.com/playmint/ds-node/pkg/contracts/state"
 	"github.com/playmint/ds-node/pkg/indexer"
+	"github.com/playmint/ds-node/pkg/indexer/stores/cog"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	uuid "github.com/satori/go.uuid"
@@ -122,7 +124,7 @@ func (seqr *MemorySequencer) Enqueue(
 		Batch:         &model.ActionBatch{},
 	}
 
-	tx, err := seqr.dispatch(context.Background(), routerAddr, actionTx)
+	_, err := seqr.dispatch(context.Background(), routerAddr, stateAddr, actionTx)
 	if err != nil {
 		seqr.log.Error().
 			Err(err).
@@ -130,18 +132,18 @@ func (seqr *MemorySequencer) Enqueue(
 		return actionTx, err
 	}
 
-	_, err = WaitMined(ctx, seqr.chainHttpClient, tx)
-	if err != nil {
-		seqr.log.Error().
-			Err(err).
-			Str("hash", tx.Hash().Hex()).
-			Msg("action-fail")
-		return actionTx, err
-	}
+	// _, err = WaitMined(ctx, seqr.chainHttpClient, tx)
+	// if err != nil {
+	// 	seqr.log.Error().
+	// 		Err(err).
+	// 		Str("hash", tx.Hash().Hex()).
+	// 		Msg("action-fail")
+	// 	return actionTx, err
+	// }
 
-	seqr.log.Info().
-		Str("hash", tx.Hash().Hex()).
-		Msg("action-commited")
+	// seqr.log.Info().
+	// 	Str("hash", tx.Hash().Hex()).
+	// 	Msg("action-commited")
 
 	return actionTx, nil
 }
@@ -149,6 +151,7 @@ func (seqr *MemorySequencer) Enqueue(
 func (seqr *MemorySequencer) dispatch(
 	ctx context.Context,
 	routerAddr common.Address,
+	stateAddr common.Address,
 	action *model.ActionTransaction,
 ) (*types.Transaction, error) {
 	// lock client
@@ -156,21 +159,68 @@ func (seqr *MemorySequencer) dispatch(
 	client.Lock()
 	defer client.Unlock()
 	// prep action data
-	actions := [][][]byte{}
-	sigs := [][]byte{}
-	actions = append(actions, action.ActionBytes())
-	sigs = append(sigs, action.ActionSig())
+	actions := action.ActionBytes()
+	sig := action.ActionSig()
 
 	sessionRouter, err := router.NewSessionRouter(routerAddr, client)
 	if err != nil {
 		return nil, err
 	}
 
+	ops, err := sessionRouter.Zispatch(&bind.CallOpts{
+		Pending: true,
+	}, actions, sig)
+	if err != nil {
+		return nil, fmt.Errorf("failed to call: %v", err)
+	}
+	// for _, op := range ops {
+	// 	fmt.Println("op ----> ", op.Kind, op.SrcNodeID)
+	// }
+
+	// build OpSet
+	opset := cog.OpSet{
+		Sig: action.Sig,
+	}
+	fakeBlockNumber, err := client.BlockNumber(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get current block: %v", err)
+	}
+	for _, op := range ops {
+		// convert op to state Event
+		switch op.Kind {
+		case 0: // edge set
+			opset.Ops = append(opset.Ops, &state.StateEdgeSet{
+				RelID:     op.RelID,
+				RelKey:    op.RelKey,
+				SrcNodeID: op.SrcNodeID,
+				DstNodeID: op.DstNodeID,
+				Weight:    op.Weight,
+				Raw:       types.Log{BlockNumber: fakeBlockNumber}, // Blockchain specific contextual infos
+			})
+		case 1: // edge remove
+			opset.Ops = append(opset.Ops, &state.StateEdgeRemove{
+				RelID:     op.RelID,
+				RelKey:    op.RelKey,
+				SrcNodeID: op.SrcNodeID,
+				Raw:       types.Log{BlockNumber: fakeBlockNumber}, // Blockchain specific contextual infos
+			})
+		case 2: // ann set
+			opset.Ops = append(opset.Ops, &state.StateAnnotationSet{
+				Id:    op.SrcNodeID,
+				Kind:  op.Kind,
+				Label: op.AnnName,
+				// Ref: , // calc as keccak of anndata
+				Data: op.AnnData,
+				Raw:  types.Log{BlockNumber: fakeBlockNumber}, // Blockchain specific contextual infos
+			})
+		}
+	}
+	seqr.idxr.AddPendingOpSet(stateAddr, opset)
+
 	txOpts, err := client.NewRelayTransactor(ctx)
 	if err != nil {
 		return nil, err
 	}
-
 	txOpts.Context = ctx
 	txOpts.Value = big.NewInt(0)
 	txOpts.GasLimit = uint64(15000000)
@@ -178,12 +228,14 @@ func (seqr *MemorySequencer) dispatch(
 
 	tx, err := sessionRouter.Dispatch(txOpts,
 		actions,
-		sigs,
+		sig,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed commit batch tx: %v", err)
 	}
 	client.IncrementRelayNonce(ctx)
+
+	// ixdr.SetPendingOpSet(sig, ops)
 	return tx, nil
 }
 

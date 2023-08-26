@@ -5,6 +5,23 @@ import {State, WeightKind, CompoundKeyKind, AnnotationKind} from "./IState.sol";
 
 error StateUnauthorizedSender();
 
+enum OpKind {
+    EdgeSet,
+    EdgeRemove,
+    AnnotationSet
+}
+
+struct Op {
+    OpKind kind;
+    bytes4 relID;
+    uint8 relKey;
+    bytes24 srcNodeID;
+    bytes24 dstNodeID;
+    uint160 weight;
+    string annName;
+    string annData;
+}
+
 contract BaseState is State {
     struct EdgeData {
         bytes24 dstNodeID;
@@ -15,9 +32,28 @@ contract BaseState is State {
     mapping(bytes24 => mapping(bytes32 => bytes32)) annotations;
     mapping(address => bool) allowlist;
 
+    Op[] ops;
+
     constructor() {
         // register the zero value under the kind name NULL
         _registerNodeType(0, "NULL", CompoundKeyKind.NONE);
+    }
+
+    function getHead() public view returns (uint256) {
+        return ops.length;
+    }
+
+    function getOps(uint256 from, uint256 to) public view returns (Op[] memory res) {
+        if (from == to) {
+            res = new Op[](0);
+            return res;
+        }
+        require(to > from, "TO must be after FROM");
+        res = new Op[](to - from);
+        for (uint256 i=0; i<res.length; i++) {
+            res[i] = ops[from + i];
+        }
+        return res;
     }
 
     function set(bytes4 relID, uint8 relKey, bytes24 srcNodeID, bytes24 dstNodeID, uint64 weight) external {
@@ -27,6 +63,14 @@ contract BaseState is State {
         // }
         edges[srcNodeID][relID][relKey] = EdgeData(dstNodeID, weight);
         emit State.EdgeSet(relID, relKey, srcNodeID, dstNodeID, weight);
+
+        Op storage op = ops.push();
+        op.kind = OpKind.EdgeSet;
+        op.relID = relID;
+        op.relKey = relKey;
+        op.srcNodeID = srcNodeID;
+        op.dstNodeID = dstNodeID;
+        op.weight = weight;
     }
 
     function remove(bytes4 relID, uint8 relKey, bytes24 srcNodeID) external {
@@ -36,6 +80,12 @@ contract BaseState is State {
         // }
         delete edges[srcNodeID][relID][relKey];
         emit State.EdgeRemove(relID, relKey, srcNodeID);
+
+        Op storage op = ops.push();
+        op.kind = OpKind.EdgeRemove;
+        op.relID = relID;
+        op.relKey = relKey;
+        op.srcNodeID = srcNodeID;
     }
 
     function get(bytes4 relID, uint8 relKey, bytes24 srcNodeID)
@@ -51,6 +101,12 @@ contract BaseState is State {
         bytes32 annotationRef = keccak256(bytes(annotationData));
         annotations[nodeID][keccak256(bytes(label))] = annotationRef;
         emit State.AnnotationSet(nodeID, AnnotationKind.CALLDATA, label, annotationRef, annotationData);
+
+        Op storage op = ops.push();
+        op.kind = OpKind.AnnotationSet;
+        op.srcNodeID = nodeID;
+        op.annName = label;
+        op.annData = annotationData;
     }
 
     function getAnnotationRef(bytes24 nodeID, string memory annotationLabel) external view returns (bytes32) {

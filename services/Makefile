@@ -23,7 +23,7 @@ pkg/api/resolver/resolver.go: schema/*.graphqls gqlgen.yml
 	go generate ./...
 	touch $@
 
-pkg/contracts/state/State.go: $(COG_CONTRACTS_DIR)/src/IState.sol
+pkg/contracts/state/State.go: $(COG_CONTRACTS_DIR)/src/BaseState.sol
 	mkdir -p pkg/contracts/state
 	(cd $(COG_CONTRACTS_DIR) && forge inspect State abi) | abigen -abi - -pkg state -type State --out $@
 

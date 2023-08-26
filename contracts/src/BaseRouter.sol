@@ -4,6 +4,7 @@ pragma solidity ^0.8.13;
 import {State} from "./IState.sol";
 import {Context, Dispatcher} from "./IDispatcher.sol";
 import {Router} from "./IRouter.sol";
+import {Op} from "./BaseState.sol";
 
 import {LibString} from "../src/utils/LibString.sol";
 
@@ -20,6 +21,8 @@ contract BaseRouter is Router {
     event SessionCreate(address session, address owner, uint32 exp, uint32 scopes);
 
     event SessionDestroy(address session);
+
+    event SeenOpSet(bytes sig);
 
     // TODO: needs gasgolfing
     struct Session {
@@ -114,7 +117,7 @@ contract BaseRouter is Router {
     // | [!] CRITICAL TODO: there is currently no replay protection for session signed actions! |
     // +-----------------------------------------------------------------------------------------+
     //
-    function _dispatch(bytes[] calldata actions, bytes calldata sig) private {
+    function dispatch(bytes[] calldata actions, bytes calldata sig) public returns (Op[] memory) {
         Session storage session;
         if (sig.length == 0) {
             // no signature provided, so we treat the sender as the session key
@@ -142,14 +145,9 @@ contract BaseRouter is Router {
         // TODO: replay protection
         Context memory ctx = Context({sender: session.owner, scopes: session.scopes, clock: uint32(block.number)});
         // forward to the dispatcher registered with the session
-        session.dispatcher.dispatch(actions, ctx);
-    }
-
-    // dispatch (batched)
-    function dispatch(bytes[][] calldata actions, bytes[] calldata sig) public {
-        for (uint256 i = 0; i < actions.length; i++) {
-            _dispatch(actions[i], sig[i]);
-        }
+        Op[] memory ops = session.dispatcher.dispatch(actions, ctx);
+        emit SeenOpSet(sig);
+        return ops;
     }
 
     // expires converts a ttl to a future block number

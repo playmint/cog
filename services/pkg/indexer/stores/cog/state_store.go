@@ -2,6 +2,7 @@ package cog
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"sync"
 
@@ -16,12 +17,19 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+type OpSet struct {
+	Sig string
+	Ops []interface{}
+}
+
 type StateStore struct {
-	wg     map[uint64]*sync.WaitGroup
-	graphs *immutable.Map[uint64, *immutable.Map[string, *model.Graph]]
-	latest uint64
-	abi    *abi.ABI
-	log    zerolog.Logger
+	wg            map[uint64]*sync.WaitGroup
+	graphs        *immutable.Map[uint64, *immutable.Map[string, *model.Graph]]
+	latest        uint64
+	abi           *abi.ABI
+	log           zerolog.Logger
+	seenOpSet     map[string]bool
+	pendingOpSets []OpSet
 	sync.RWMutex
 }
 
@@ -31,10 +39,11 @@ func NewStateStore(ctx context.Context, watcher *eventwatcher.Watcher) (*StateSt
 		panic(err)
 	}
 	store := &StateStore{
-		graphs: immutable.NewMap[uint64, *immutable.Map[string, *model.Graph]](nil),
-		wg:     map[uint64]*sync.WaitGroup{},
-		abi:    &cabi,
-		log:    log.With().Str("service", "indexer").Str("component", "statestore").Str("name", "latest").Logger(),
+		graphs:    immutable.NewMap[uint64, *immutable.Map[string, *model.Graph]](nil),
+		wg:        map[uint64]*sync.WaitGroup{},
+		abi:       &cabi,
+		log:       log.With().Str("service", "indexer").Str("component", "statestore").Str("name", "latest").Logger(),
+		seenOpSet: map[string]bool{},
 	}
 	store.watch(ctx, watcher)
 	return store, nil
@@ -48,6 +57,7 @@ func (rs *StateStore) watch(ctx context.Context, watcher *eventwatcher.Watcher) 
 		rs.abi.Events["NodeTypeRegister"].ID,
 		rs.abi.Events["EdgeTypeRegister"].ID,
 		rs.abi.Events["AnnotationSet"].ID,
+		rs.abi.Events["SeenOpSet"].ID,
 	}}
 	topics, err := abi.MakeTopics(query...)
 	if err != nil {
@@ -64,6 +74,7 @@ func (rs *StateStore) processBlock(ctx context.Context, block *eventwatcher.LogB
 	if !ok {
 		graphs = immutable.NewMap[string, *model.Graph](nil)
 	}
+	seenOps := []string{}
 	for _, rawEvent := range block.Logs {
 		if rawEvent.Removed {
 			// FIXME: ignoring reorg
@@ -125,6 +136,13 @@ func (rs *StateStore) processBlock(ctx context.Context, block *eventwatcher.LogB
 			if err != nil {
 				rs.log.Error().Err(err).Msgf("failed process %T event", evt)
 			}
+		case "SeenOpSet":
+			var evt state.StateSeenOpSet
+			if err := unpackLog(rs.abi, &evt, eventABI.RawName, rawEvent); err != nil {
+				rs.log.Warn().Err(err).Msgf("undecodable %T event", evt)
+				continue
+			}
+			seenOps = append(seenOps, hexutil.Encode(evt.Sig))
 		case "EdgeTypeRegister":
 			var evt state.StateEdgeTypeRegister
 			if err := unpackLog(rs.abi, &evt, eventABI.RawName, rawEvent); err != nil {
@@ -172,6 +190,20 @@ func (rs *StateStore) processBlock(ctx context.Context, block *eventwatcher.LogB
 	// switch to latest
 	rs.graphs = allGraphs
 	rs.latest = uint64(block.ToBlock)
+
+	// update pending
+	for _, seen := range seenOps {
+		fmt.Println("SEEEEEEEEEEEEEEEEEEEEN: ", seen)
+		rs.seenOpSet[seen] = true
+	}
+	newPendingOpSets := []OpSet{}
+	for _, opset := range rs.pendingOpSets {
+		if rs.seenOpSet[opset.Sig] {
+			continue
+		}
+		newPendingOpSets = append(newPendingOpSets, opset)
+	}
+	rs.pendingOpSets = newPendingOpSets
 
 	for block, wg := range rs.wg {
 		if rs.latest >= block {
@@ -255,8 +287,8 @@ func (rs *StateStore) removeEdge(g *model.Graph, evt *state.StateEdgeRemove) (*m
 }
 
 func (rs *StateStore) GetGraph(stateContractAddr common.Address, block int) *model.Graph {
-	rs.Lock()
-	defer rs.Unlock()
+	rs.RLock()
+	defer rs.RUnlock()
 	b := rs.latest
 	if block != 0 {
 		b = uint64(block)
@@ -269,6 +301,50 @@ func (rs *StateStore) GetGraph(stateContractAddr common.Address, block int) *mod
 	g, ok := graphs.Get(stateContractAddr.Hex())
 	if !ok {
 		return nil
+	}
+	return g
+}
+
+func (rs *StateStore) AddPendingOpSet(stateContractAddr common.Address, opset OpSet) {
+	rs.Lock()
+	defer rs.Unlock()
+	rs.pendingOpSets = append(rs.pendingOpSets, opset)
+}
+
+func (rs *StateStore) GetPendingGraph(stateContractAddr common.Address, block int) *model.Graph {
+	g := rs.GetGraph(stateContractAddr, block)
+	if g == nil {
+		return nil
+	}
+	rs.RLock()
+	defer rs.RUnlock()
+	fmt.Println("GetPendingGraph pendingcount=", len(rs.pendingOpSets), "seencount=", len(rs.seenOpSet))
+	for _, opset := range rs.pendingOpSets {
+		fmt.Printf("sig=%s", opset.Sig)
+		if rs.seenOpSet[opset.Sig] {
+			// todo remove from pending
+			continue
+		}
+		for _, op := range opset.Ops {
+			var err error
+			var g2 *model.Graph
+			switch evt := op.(type) {
+			case *state.StateEdgeSet:
+				g2, err = rs.setEdge(g, evt)
+			case *state.StateEdgeRemove:
+				g2, err = rs.removeEdge(g, evt)
+			case *state.StateAnnotationSet:
+				g2, err = rs.setAnnotation(g, evt)
+			default:
+				err = fmt.Errorf("unexpected evt: %v", evt)
+			}
+			if err != nil {
+				fmt.Printf("ERROR: failed to apply pending op: %v\n", err)
+			} else {
+				// fmt.Println("....INCLUDED PENDING")
+				g = g2
+			}
+		}
 	}
 	return g
 }
