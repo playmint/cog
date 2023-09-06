@@ -223,7 +223,7 @@ func (seqr *MemorySequencer) dispatch(
 	}
 	txOpts.Context = ctx
 	txOpts.Value = big.NewInt(0)
-	txOpts.GasLimit = uint64(15000000)
+	txOpts.GasLimit = uint64(20000000)
 	txOpts.GasPrice = big.NewInt(1000000500)
 
 	tx, err := sessionRouter.Dispatch(txOpts,
