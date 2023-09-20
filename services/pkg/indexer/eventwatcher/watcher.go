@@ -34,6 +34,7 @@ type Config struct {
 	Simulated            bool
 	Notifications        chan interface{}
 	NotificationsEnabled bool
+	Addresses            []common.Address
 }
 
 type Watcher struct {
@@ -67,7 +68,7 @@ func (rs *Watcher) Stop() {
 
 func (rs *Watcher) Start(ctx context.Context) {
 	rs.log.Info().Msg("watcher-start")
-	topicQuery := ethereum.FilterQuery{Topics: [][]common.Hash{rs.topic0}}
+	topicQuery := ethereum.FilterQuery{Topics: [][]common.Hash{rs.topic0}, Addresses: rs.config.Addresses}
 	ctx, rs.stop = context.WithCancel(ctx)
 	go rs.watch(ctx, topicQuery)
 	go rs.publisher(ctx)

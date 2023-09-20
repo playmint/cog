@@ -56,7 +56,7 @@ func (r *mutationResolver) Signout(ctx context.Context, gameID string, session s
 	return true, nil
 }
 
-func (r *mutationResolver) Dispatch(ctx context.Context, gameID string, actions []string, authorization string) (*model.ActionTransaction, error) {
+func (r *mutationResolver) Dispatch(ctx context.Context, gameID string, actions []string, authorization string, optimistic bool) (*model.ActionTransaction, error) {
 	game := r.Indexer.GetGame(gameID)
 	if game == nil {
 		return nil, fmt.Errorf("no game found with id %v", game)
@@ -75,6 +75,7 @@ func (r *mutationResolver) Dispatch(ctx context.Context, gameID string, actions 
 		game.StateAddress,
 		actions,
 		authorization,
+		optimistic,
 	)
 	if err != nil {
 		return nil, err

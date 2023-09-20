@@ -17,6 +17,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/playmint/ds-node/pkg/api/model"
 	"github.com/playmint/ds-node/pkg/client/alchemy"
+	"github.com/playmint/ds-node/pkg/config"
 	"github.com/playmint/ds-node/pkg/contracts/router"
 	"github.com/playmint/ds-node/pkg/contracts/state"
 	"github.com/playmint/ds-node/pkg/indexer"
@@ -36,6 +37,7 @@ type Sequencer interface {
 		stateAddress common.Address,
 		actionPayload []string,
 		actionSig string,
+		optimistic bool,
 	) (*model.ActionTransaction, error)
 	Signin(
 		ctx context.Context,
@@ -61,6 +63,7 @@ type MemorySequencer struct {
 	notifications     chan interface{}
 	idxr              indexer.Indexer
 	log               zerolog.Logger
+	pendingSim        bool
 }
 
 func NewMemorySequencer(
@@ -88,6 +91,7 @@ func NewMemorySequencer(
 	if err != nil {
 		return nil, err
 	}
+	seqr.pendingSim = config.SequencerPendingSim
 
 	return seqr, nil
 }
@@ -111,6 +115,7 @@ func (seqr *MemorySequencer) Enqueue(
 	stateAddr common.Address,
 	actionData []string,
 	actionSig string,
+	optimistic bool,
 ) (*model.ActionTransaction, error) {
 	if routerAddr.Hex() == "" || len(actionData) == 0 || actionSig == "" {
 		return nil, fmt.Errorf("invalid action data")
@@ -124,58 +129,80 @@ func (seqr *MemorySequencer) Enqueue(
 		Batch:         &model.ActionBatch{},
 	}
 
-	_, err := seqr.dispatch(context.Background(), routerAddr, stateAddr, actionTx)
-	if err != nil {
-		seqr.log.Error().
-			Err(err).
-			Msg("action-rejected")
-		return actionTx, err
+	realDispatch := func() error {
+		tx, err := seqr.dispatch(context.Background(), routerAddr, stateAddr, actionTx)
+		if err != nil {
+			seqr.log.Error().
+				Err(err).
+				Msg("action-rejected-chain")
+			return err
+		}
+
+		seqr.log.Info().
+			Str("hash", tx.Hash().Hex()).
+			Msg("action-accepted-chain")
+
+		maxWaitMined, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+		defer cancel()
+		_, err = WaitMined(maxWaitMined, seqr.chainHttpClient, tx)
+		if err != nil {
+			seqr.log.Error().
+				Err(err).
+				Str("hash", tx.Hash().Hex()).
+				Msg("action-fail")
+			return err
+		}
+		seqr.log.Info().
+			Str("hash", tx.Hash().Hex()).
+			Msg("action-success")
+		return nil
 	}
 
-	// _, err = WaitMined(ctx, seqr.chainHttpClient, tx)
-	// if err != nil {
-	// 	seqr.log.Error().
-	// 		Err(err).
-	// 		Str("hash", tx.Hash().Hex()).
-	// 		Msg("action-fail")
-	// 	return actionTx, err
-	// }
+	if optimistic {
+		err := seqr.dispatchSim(context.Background(), routerAddr, stateAddr, actionTx)
+		if err != nil {
+			seqr.log.Error().
+				Err(err).
+				Msg("action-rejected-sim")
+			return actionTx, err
+		}
+		seqr.log.Info().
+			Msg("action-accepted-sim")
 
-	// seqr.log.Info().
-	// 	Str("hash", tx.Hash().Hex()).
-	// 	Msg("action-commited")
+		go realDispatch() // off it goes, hoping for the best
+
+	} else {
+
+		if err := realDispatch(); err != nil {
+			return nil, err
+		}
+	}
 
 	return actionTx, nil
 }
 
-func (seqr *MemorySequencer) dispatch(
+func (seqr *MemorySequencer) dispatchSim(
 	ctx context.Context,
 	routerAddr common.Address,
 	stateAddr common.Address,
 	action *model.ActionTransaction,
-) (*types.Transaction, error) {
-	// lock client
+) error {
 	client := seqr.chainHttpClient
-	client.Lock()
-	defer client.Unlock()
 	// prep action data
 	actions := action.ActionBytes()
 	sig := action.ActionSig()
 
 	sessionRouter, err := router.NewSessionRouter(routerAddr, client)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	ops, err := sessionRouter.Zispatch(&bind.CallOpts{
 		Pending: true,
 	}, actions, sig)
 	if err != nil {
-		return nil, fmt.Errorf("failed to call: %v", err)
+		return fmt.Errorf("failed to call: %v", err)
 	}
-	// for _, op := range ops {
-	// 	fmt.Println("op ----> ", op.Kind, op.SrcNodeID)
-	// }
 
 	// build OpSet
 	opset := cog.OpSet{
@@ -183,7 +210,7 @@ func (seqr *MemorySequencer) dispatch(
 	}
 	fakeBlockNumber, err := client.BlockNumber(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get current block: %v", err)
+		return fmt.Errorf("failed to get current block: %v", err)
 	}
 	for _, op := range ops {
 		// convert op to state Event
@@ -215,7 +242,22 @@ func (seqr *MemorySequencer) dispatch(
 			})
 		}
 	}
-	seqr.idxr.AddPendingOpSet(stateAddr, opset)
+	seqr.idxr.AddPendingOpSet(opset)
+	return nil
+}
+
+func (seqr *MemorySequencer) dispatch(
+	ctx context.Context,
+	routerAddr common.Address,
+	stateAddr common.Address,
+	action *model.ActionTransaction,
+) (*types.Transaction, error) {
+	client := seqr.chainHttpClient
+	client.Lock()
+	defer client.Unlock()
+
+	actions := action.ActionBytes()
+	sig := action.ActionSig()
 
 	txOpts, err := client.NewRelayTransactor(ctx)
 	if err != nil {
@@ -226,6 +268,10 @@ func (seqr *MemorySequencer) dispatch(
 	txOpts.GasLimit = uint64(20000000)
 	txOpts.GasPrice = big.NewInt(1000000500)
 
+	sessionRouter, err := router.NewSessionRouter(routerAddr, client)
+	if err != nil {
+		return nil, err
+	}
 	tx, err := sessionRouter.Dispatch(txOpts,
 		actions,
 		sig,
@@ -235,7 +281,6 @@ func (seqr *MemorySequencer) dispatch(
 	}
 	client.IncrementRelayNonce(ctx)
 
-	// ixdr.SetPendingOpSet(sig, ops)
 	return tx, nil
 }
 

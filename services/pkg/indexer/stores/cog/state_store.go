@@ -6,9 +6,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/benbjohnson/immutable"
 	"github.com/ethereum/go-ethereum/accounts/abi"
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/playmint/ds-node/pkg/api/model"
 	"github.com/playmint/ds-node/pkg/contracts/state"
@@ -23,12 +21,10 @@ type OpSet struct {
 }
 
 type StateStore struct {
-	wg            map[uint64]*sync.WaitGroup
-	graphs        *immutable.Map[uint64, *immutable.Map[string, *model.Graph]]
-	latest        uint64
+	graph         *model.Graph
+	pendingGraph  *model.Graph
 	abi           *abi.ABI
 	log           zerolog.Logger
-	seenOpSet     map[string]bool
 	pendingOpSets []OpSet
 	sync.RWMutex
 }
@@ -39,11 +35,8 @@ func NewStateStore(ctx context.Context, watcher *eventwatcher.Watcher) (*StateSt
 		panic(err)
 	}
 	store := &StateStore{
-		graphs:    immutable.NewMap[uint64, *immutable.Map[string, *model.Graph]](nil),
-		wg:        map[uint64]*sync.WaitGroup{},
-		abi:       &cabi,
-		log:       log.With().Str("service", "indexer").Str("component", "statestore").Str("name", "latest").Logger(),
-		seenOpSet: map[string]bool{},
+		abi: &cabi,
+		log: log.With().Str("service", "indexer").Str("component", "statestore").Str("name", "latest").Logger(),
 	}
 	store.watch(ctx, watcher)
 	return store, nil
@@ -70,11 +63,13 @@ func (rs *StateStore) watch(ctx context.Context, watcher *eventwatcher.Watcher) 
 func (rs *StateStore) processBlock(ctx context.Context, block *eventwatcher.LogBatch) {
 	rs.Lock()
 	defer rs.Unlock()
-	graphs, ok := rs.graphs.Get(rs.latest)
-	if !ok {
-		graphs = immutable.NewMap[string, *model.Graph](nil)
+
+	g := rs.graph
+	if g == nil {
+		g = model.NewGraph(0)
 	}
-	seenOps := []string{}
+
+	seenOps := map[string]bool{}
 	for _, rawEvent := range block.Logs {
 		if rawEvent.Removed {
 			// FIXME: ignoring reorg
@@ -85,10 +80,6 @@ func (rs *StateStore) processBlock(ctx context.Context, block *eventwatcher.LogB
 		if err != nil {
 			rs.log.Debug().Msgf("unhandleable event topic: %v", err)
 			continue
-		}
-		g, ok := graphs.Get(rawEvent.Address.Hex())
-		if !ok {
-			g = model.NewGraph(rawEvent.BlockNumber)
 		}
 		rs.log.Debug().Msgf("recv %v", eventABI.RawName)
 		switch eventABI.RawName {
@@ -142,7 +133,7 @@ func (rs *StateStore) processBlock(ctx context.Context, block *eventwatcher.LogB
 				rs.log.Warn().Err(err).Msgf("undecodable %T event", evt)
 				continue
 			}
-			seenOps = append(seenOps, hexutil.Encode(evt.Sig))
+			seenOps[hexutil.Encode(evt.Sig)] = true
 		case "EdgeTypeRegister":
 			var evt state.StateEdgeTypeRegister
 			if err := unpackLog(rs.abi, &evt, eventABI.RawName, rawEvent); err != nil {
@@ -157,60 +148,13 @@ func (rs *StateStore) processBlock(ctx context.Context, block *eventwatcher.LogB
 		default:
 			rs.log.Warn().Msgf("ignoring unhandled event type %v", eventABI)
 		}
-		graphs = graphs.Set(rawEvent.Address.Hex(), g)
-	}
-	allGraphs := rs.graphs.Set(uint64(block.ToBlock), graphs)
-
-	// only keep last $maxKeep graphs
-	// [!] this can be removed once we persist data to disk, but it isn't
-	//     practical to keep history while using in-memory storage
-	maxKeep := uint64(250)
-	oldestToKeep := uint64(0)
-	if uint64(block.ToBlock) > maxKeep {
-		oldestToKeep = uint64(block.ToBlock) - maxKeep
-	}
-	itr := allGraphs.Iterator()
-	for !itr.Done() {
-		k, _, ok := itr.Next()
-		if !ok {
-			continue
-		}
-		if k == rs.latest {
-			continue
-		}
-		if k == uint64(block.ToBlock) {
-			continue
-		}
-		if k > oldestToKeep {
-			continue
-		}
-		allGraphs = allGraphs.Delete(k)
 	}
 
-	// switch to latest
-	rs.graphs = allGraphs
-	rs.latest = uint64(block.ToBlock)
+	// update
+	rs.pendingOpSets = rs.removePendingOpSets(seenOps)
+	rs.graph = g
+	rs.pendingGraph = rs.rebuildPendingGraph()
 
-	// update pending
-	for _, seen := range seenOps {
-		fmt.Println("SEEEEEEEEEEEEEEEEEEEEN: ", seen)
-		rs.seenOpSet[seen] = true
-	}
-	newPendingOpSets := []OpSet{}
-	for _, opset := range rs.pendingOpSets {
-		if rs.seenOpSet[opset.Sig] {
-			continue
-		}
-		newPendingOpSets = append(newPendingOpSets, opset)
-	}
-	rs.pendingOpSets = newPendingOpSets
-
-	for block, wg := range rs.wg {
-		if rs.latest >= block {
-			wg.Done()
-			delete(rs.wg, block)
-		}
-	}
 }
 
 func (rs *StateStore) watchLoop(ctx context.Context, blocks chan *eventwatcher.LogBatch) {
@@ -286,45 +230,49 @@ func (rs *StateStore) removeEdge(g *model.Graph, evt *state.StateEdgeRemove) (*m
 	return g, nil
 }
 
-func (rs *StateStore) GetGraph(stateContractAddr common.Address, block int) *model.Graph {
-	rs.RLock()
-	defer rs.RUnlock()
-	b := rs.latest
-	if block != 0 {
-		b = uint64(block)
-	}
-
-	graphs, ok := rs.graphs.Get(b)
-	if !ok {
-		return nil
-	}
-	g, ok := graphs.Get(stateContractAddr.Hex())
-	if !ok {
-		return nil
-	}
-	return g
+func (rs *StateStore) GetGraph() *model.Graph {
+	rs.Lock()
+	defer rs.Unlock()
+	return rs.GetGraph()
 }
 
-func (rs *StateStore) AddPendingOpSet(stateContractAddr common.Address, opset OpSet) {
+func (rs *StateStore) AddPendingOpSet(opset OpSet) {
 	rs.Lock()
 	defer rs.Unlock()
 	rs.pendingOpSets = append(rs.pendingOpSets, opset)
+	rs.pendingGraph = rs.rebuildPendingGraph()
 }
 
-func (rs *StateStore) GetPendingGraph(stateContractAddr common.Address, block int) *model.Graph {
-	g := rs.GetGraph(stateContractAddr, block)
-	if g == nil {
-		return nil
-	}
-	rs.RLock()
-	defer rs.RUnlock()
-	fmt.Println("GetPendingGraph pendingcount=", len(rs.pendingOpSets), "seencount=", len(rs.seenOpSet))
+func (rs *StateStore) RemovePendingOpSets(seenOps map[string]bool) []OpSet {
+	rs.Lock()
+	defer rs.Unlock()
+	return rs.removePendingOpSets(seenOps)
+}
+
+func (rs *StateStore) removePendingOpSets(seenOps map[string]bool) []OpSet {
+	newPendingOpSets := []OpSet{}
 	for _, opset := range rs.pendingOpSets {
-		fmt.Printf("sig=%s", opset.Sig)
-		if rs.seenOpSet[opset.Sig] {
-			// todo remove from pending
+		if seenOps[opset.Sig] {
+			fmt.Println("SEEEEEEEEEEEEEEEEEEEEN: ", opset.Sig)
 			continue
 		}
+		newPendingOpSets = append(newPendingOpSets, opset)
+	}
+	return newPendingOpSets
+}
+
+func (rs *StateStore) GetPendingGraph() *model.Graph {
+	return rs.pendingGraph
+}
+
+func (rs *StateStore) rebuildPendingGraph() *model.Graph {
+	g := rs.graph
+	if g == nil {
+		fmt.Println("rebuildPendingGraph failed: no graph to build on")
+		return nil
+	}
+	fmt.Println("GetPendingGraph pendingcount=", len(rs.pendingOpSets))
+	for _, opset := range rs.pendingOpSets {
 		for _, op := range opset.Ops {
 			var err error
 			var g2 *model.Graph
@@ -341,7 +289,6 @@ func (rs *StateStore) GetPendingGraph(stateContractAddr common.Address, block in
 			if err != nil {
 				fmt.Printf("ERROR: failed to apply pending op: %v\n", err)
 			} else {
-				// fmt.Println("....INCLUDED PENDING")
 				g = g2
 			}
 		}

@@ -136,7 +136,7 @@ type ComplexityRoot struct {
 	}
 
 	Mutation struct {
-		Dispatch func(childComplexity int, gameID string, actions []string, authorization string) int
+		Dispatch func(childComplexity int, gameID string, actions []string, authorization string, optimistic bool) int
 		Signin   func(childComplexity int, gameID string, session string, ttl int, scope string, authorization string) int
 		Signout  func(childComplexity int, gameID string, session string, authorization string) int
 		Signup   func(childComplexity int, gameID string, authorization string) int
@@ -206,7 +206,7 @@ type MutationResolver interface {
 	Signup(ctx context.Context, gameID string, authorization string) (bool, error)
 	Signin(ctx context.Context, gameID string, session string, ttl int, scope string, authorization string) (bool, error)
 	Signout(ctx context.Context, gameID string, session string, authorization string) (bool, error)
-	Dispatch(ctx context.Context, gameID string, actions []string, authorization string) (*model.ActionTransaction, error)
+	Dispatch(ctx context.Context, gameID string, actions []string, authorization string, optimistic bool) (*model.ActionTransaction, error)
 }
 type QueryResolver interface {
 	Game(ctx context.Context, id string) (*model.Game, error)
@@ -624,7 +624,7 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 			return 0, false
 		}
 
-		return e.complexity.Mutation.Dispatch(childComplexity, args["gameID"].(string), args["actions"].([]string), args["authorization"].(string)), true
+		return e.complexity.Mutation.Dispatch(childComplexity, args["gameID"].(string), args["actions"].([]string), args["authorization"].(string), args["optimistic"].(bool)), true
 
 	case "Mutation.signin":
 		if e.complexity.Mutation.Signin == nil {
@@ -1119,34 +1119,33 @@ type Game {
 	subscribers: Int!
 }
 `, BuiltIn: false},
-	{Name: "schema/mutations.graphqls", Input: `
-type Mutation {
+	{Name: "schema/mutations.graphqls", Input: `type Mutation {
 	signup(
-		gameID: ID!,            # which game to route to
-		authorization: String!, # owner's real wallet signature of request
+		gameID: ID! # which game to route to
+		authorization: String! # owner's real wallet signature of request
 	): Boolean!
 
 	signin(
-		gameID: ID!,            # which game to route to
-		session: String!,       # session public key address
-		ttl: Int!,              # blocks
-		scope: String!,         # permissions to grant session, set to 0xffffffff for FULL_ACCESS
-		authorization: String!, # owner's real wallet signature of request
+		gameID: ID! # which game to route to
+		session: String! # session public key address
+		ttl: Int! # blocks
+		scope: String! # permissions to grant session, set to 0xffffffff for FULL_ACCESS
+		authorization: String! # owner's real wallet signature of request
 	): Boolean!
 
 	signout(
-		gameID: ID!,            # which game to route to
-		session: String!,       # session public key address
-		authorization: String!  # owner's real wallet signature of request
+		gameID: ID! # which game to route to
+		session: String! # session public key address
+		authorization: String! # owner's real wallet signature of request
 	): Boolean!
 
 	dispatch(
-		gameID: ID!,            # which game to route to
-		actions: [String!]!,     # encoded action bytes
-		authorization: String!  # session's signature of request
+		gameID: ID! # which game to route to
+		actions: [String!]! # encoded action bytes
+		authorization: String! # session's signature of request
+		optimistic: Boolean! # if true returns as soon as got a simulated result, if false waits for a real confirmation
 	): ActionTransaction!
 }
-
 `, BuiltIn: false},
 	{Name: "schema/query.graphqls", Input: `
 type Query {
@@ -1559,6 +1558,15 @@ func (ec *executionContext) field_Mutation_dispatch_args(ctx context.Context, ra
 		}
 	}
 	args["authorization"] = arg2
+	var arg3 bool
+	if tmp, ok := rawArgs["optimistic"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("optimistic"))
+		arg3, err = ec.unmarshalNBoolean2bool(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["optimistic"] = arg3
 	return args, nil
 }
 
@@ -4001,7 +4009,7 @@ func (ec *executionContext) _Mutation_dispatch(ctx context.Context, field graphq
 	fc.Args = args
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
 		ctx = rctx // use context from middleware stack in children
-		return ec.resolvers.Mutation().Dispatch(rctx, args["gameID"].(string), args["actions"].([]string), args["authorization"].(string))
+		return ec.resolvers.Mutation().Dispatch(rctx, args["gameID"].(string), args["actions"].([]string), args["authorization"].(string), args["optimistic"].(bool))
 	})
 	if err != nil {
 		ec.Error(ctx, err)

@@ -21,7 +21,7 @@ type Indexer interface {
 	GetGraph(stateContractAddr common.Address, block int, simulated bool) *model.Graph
 	GetSession(routerAddr common.Address, sessionID string) *model.Session
 	GetSessions(routerAddr common.Address, owner *string) []*model.Session
-	AddPendingOpSet(stateContractAddr common.Address, opset cog.OpSet)
+	AddPendingOpSet(opset cog.OpSet)
 }
 
 var _ Indexer = &MemoryIndexer{}
@@ -62,11 +62,24 @@ func NewMemoryIndexer(ctx context.Context, notifications chan interface{}, httpP
 		return nil, err
 	}
 
+	var contractAddrs []common.Address
+	empty := common.Address{}
+	if config.IndexerStateAddress != empty {
+		contractAddrs = append(contractAddrs, config.IndexerStateAddress)
+	}
+	if config.IndexerGameAddress != empty {
+		contractAddrs = append(contractAddrs, config.IndexerGameAddress)
+	}
+	if config.IndexerRouterAddress != empty {
+		contractAddrs = append(contractAddrs, config.IndexerRouterAddress)
+	}
+
 	idxr.events, err = eventwatcher.New(eventwatcher.Config{
 		HTTPClient:    idxr.httpClient,
 		Websocket:     idxr.wsClient,
 		LogRange:      config.IndexerMaxLogRange,
 		Notifications: notifications,
+		Addresses:     contractAddrs,
 	})
 	if err != nil {
 		return nil, err
@@ -121,15 +134,15 @@ func (idxr *MemoryIndexer) GetGames() []*model.Game {
 	return idxr.gameStore.GetGames()
 }
 
-func (idxr *MemoryIndexer) AddPendingOpSet(stateContractAddr common.Address, opset cog.OpSet) {
-	idxr.stateStore.AddPendingOpSet(stateContractAddr, opset)
+func (idxr *MemoryIndexer) AddPendingOpSet(opset cog.OpSet) {
+	idxr.stateStore.AddPendingOpSet(opset)
 }
 
 func (idxr *MemoryIndexer) GetGraph(stateContractAddr common.Address, block int, simulated bool) *model.Graph {
 	if simulated {
-		return idxr.stateStore.GetPendingGraph(stateContractAddr, block)
+		return idxr.stateStore.GetPendingGraph()
 	}
-	return idxr.stateStore.GetGraph(stateContractAddr, block)
+	return idxr.stateStore.GetGraph()
 }
 func (idxr *MemoryIndexer) GetSession(routerAddr common.Address, sessionID string) *model.Session {
 	return idxr.sessionStore.GetSession(routerAddr, sessionID)

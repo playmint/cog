@@ -48,6 +48,7 @@ func (api *Server) Start(ctx context.Context, subscriptions *model.Subscriptions
 	router.Use(cors.New(cors.Options{
 		AllowedOrigins:   []string{"*"}, // FIXME: this is lazy and potentially bad, allow setting from env/config
 		AllowCredentials: true,
+		MaxAge:           86400,
 		Debug:            false,
 	}).Handler)
 
