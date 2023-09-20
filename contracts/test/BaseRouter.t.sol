@@ -140,21 +140,14 @@ contract BaseRouterTest is Test {
     // the LogSenderRule sets the state to the action's owner so we
     // can confirm what the action got processed as
     function dispatchSigned(uint256 privateKey) internal {
+        uint256 nonce = 111; // random pick
         bytes[] memory actions = new bytes[](1);
         actions[0] = abi.encodeCall(TestActions.SET_SENDER, ());
-        bytes32 digest = keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n32", keccak256(abi.encode(actions))));
+        bytes32 digest = keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n32", keccak256(abi.encode(actions, nonce))));
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(privateKey, digest);
         bytes memory sig = abi.encodePacked(r, s, v);
 
-        // initialize a batch
-        bytes[][] memory batchedActions = new bytes[][](1);
-        bytes[] memory batchedSigs = new bytes[](1);
-
-        // assign action into batch
-        batchedActions[0] = actions;
-        batchedSigs[0] = sig;
-
         vm.prank(relayAddr);
-        router.dispatch(batchedActions[0], batchedSigs[0]);
+        router.dispatch(actions, sig, nonce);
     }
 }

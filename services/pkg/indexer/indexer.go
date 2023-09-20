@@ -22,6 +22,7 @@ type Indexer interface {
 	GetSession(routerAddr common.Address, sessionID string) *model.Session
 	GetSessions(routerAddr common.Address, owner *string) []*model.Session
 	AddPendingOpSet(opset cog.OpSet)
+	RemovePendingOpSets(opset map[string]bool)
 }
 
 var _ Indexer = &MemoryIndexer{}
@@ -136,6 +137,10 @@ func (idxr *MemoryIndexer) GetGames() []*model.Game {
 
 func (idxr *MemoryIndexer) AddPendingOpSet(opset cog.OpSet) {
 	idxr.stateStore.AddPendingOpSet(opset)
+}
+
+func (idxr *MemoryIndexer) RemovePendingOpSets(opset map[string]bool) {
+	idxr.stateStore.RemovePendingOpSets(opset)
 }
 
 func (idxr *MemoryIndexer) GetGraph(stateContractAddr common.Address, block int, simulated bool) *model.Graph {

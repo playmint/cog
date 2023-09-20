@@ -5,11 +5,16 @@ package resolver
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/playmint/ds-node/pkg/api/generated"
 	"github.com/playmint/ds-node/pkg/api/model"
 )
+
+func (r *actionTransactionResolver) Nonce(ctx context.Context, obj *model.ActionTransaction) (int, error) {
+	panic(fmt.Errorf("not implemented"))
+}
 
 func (r *routerResolver) Sessions(ctx context.Context, obj *model.Router, owner *string) ([]*model.Session, error) {
 	return r.Indexer.GetSessions(
@@ -39,7 +44,13 @@ func (r *routerResolver) Transaction(ctx context.Context, obj *model.Router, id 
 	)
 }
 
+// ActionTransaction returns generated.ActionTransactionResolver implementation.
+func (r *Resolver) ActionTransaction() generated.ActionTransactionResolver {
+	return &actionTransactionResolver{r}
+}
+
 // Router returns generated.RouterResolver implementation.
 func (r *Resolver) Router() generated.RouterResolver { return &routerResolver{r} }
 
+type actionTransactionResolver struct{ *Resolver }
 type routerResolver struct{ *Resolver }

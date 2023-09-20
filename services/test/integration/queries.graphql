@@ -82,6 +82,7 @@ mutation dispatch($gameID: ID!, $actions: [String!]!, $auth: String!) {
 		gameID: $gameID
 		actions: $actions # encoded action bytes
 		authorization: $auth # session's signature of $action
+		nonce: 123
 		optimistic: false
 	) {
 		id

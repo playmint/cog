@@ -8,6 +8,7 @@ type ActionTransaction struct {
 	ID            string   `json:"id"`
 	Payload       []string `json:"payload"`
 	Sig           string   `json:"sig"`
+	Nonce         uint64   `json:"nonce"`
 	RouterAddress string
 	Owner         string `json:"owner"`
 	Batch         *ActionBatch

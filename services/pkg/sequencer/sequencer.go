@@ -37,6 +37,7 @@ type Sequencer interface {
 		stateAddress common.Address,
 		actionPayload []string,
 		actionSig string,
+		actionNonce uint64,
 		optimistic bool,
 	) (*model.ActionTransaction, error)
 	Signin(
@@ -115,6 +116,7 @@ func (seqr *MemorySequencer) Enqueue(
 	stateAddr common.Address,
 	actionData []string,
 	actionSig string,
+	actionNonce uint64,
 	optimistic bool,
 ) (*model.ActionTransaction, error) {
 	if routerAddr.Hex() == "" || len(actionData) == 0 || actionSig == "" {
@@ -125,21 +127,38 @@ func (seqr *MemorySequencer) Enqueue(
 		ID:            uuid.NewV4().String(),
 		Payload:       actionData,
 		Sig:           actionSig,
+		Nonce:         actionNonce,
 		RouterAddress: routerAddr.Hex(),
 		Batch:         &model.ActionBatch{},
 	}
 
-	realDispatch := func() error {
-		tx, err := seqr.dispatch(context.Background(), routerAddr, stateAddr, actionTx)
+	realDispatch := func(opset *cog.OpSet) error {
+		sendTimeout, sendCancel := context.WithTimeout(context.Background(), 5*time.Minute)
+		defer sendCancel()
+		tx, err := seqr.dispatch(sendTimeout, routerAddr, stateAddr, actionTx)
 		if err != nil {
+			// TODO: if we have timedout here, it's still possible that a tx is
+			// in the mempool and blocking future tx ... we probably need to
+			// cancel the tx
 			seqr.log.Error().
 				Err(err).
+				Uint64("nonce", actionNonce).
 				Msg("action-rejected-chain")
+			if optimistic && opset != nil {
+				seqr.log.Error().
+					Str("opset", opset.Sig).
+					Uint64("nonce", actionNonce).
+					Msg("remove-stale-pending")
+				seqr.idxr.RemovePendingOpSets(map[string]bool{
+					opset.Sig: true,
+				})
+			}
 			return err
 		}
 
 		seqr.log.Info().
 			Str("hash", tx.Hash().Hex()).
+			Uint64("nonce", actionNonce).
 			Msg("action-accepted-chain")
 
 		maxWaitMined, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
@@ -149,31 +168,40 @@ func (seqr *MemorySequencer) Enqueue(
 			seqr.log.Error().
 				Err(err).
 				Str("hash", tx.Hash().Hex()).
+				Uint64("nonce", actionNonce).
 				Msg("action-fail")
+			if optimistic && opset != nil {
+				seqr.idxr.RemovePendingOpSets(map[string]bool{
+					opset.Sig: true,
+				})
+			}
 			return err
 		}
 		seqr.log.Info().
 			Str("hash", tx.Hash().Hex()).
+			Uint64("nonce", actionNonce).
 			Msg("action-success")
 		return nil
 	}
 
 	if optimistic {
-		err := seqr.dispatchSim(context.Background(), routerAddr, stateAddr, actionTx)
+		pending, err := seqr.dispatchSim(context.Background(), routerAddr, stateAddr, actionTx)
 		if err != nil {
 			seqr.log.Error().
 				Err(err).
+				Uint64("nonce", actionNonce).
 				Msg("action-rejected-sim")
 			return actionTx, err
 		}
 		seqr.log.Info().
+			Uint64("nonce", actionNonce).
 			Msg("action-accepted-sim")
 
-		go realDispatch() // off it goes, hoping for the best
+		go realDispatch(pending) // off it goes, hoping for the best
 
 	} else {
 
-		if err := realDispatch(); err != nil {
+		if err := realDispatch(nil); err != nil {
 			return nil, err
 		}
 	}
@@ -186,22 +214,26 @@ func (seqr *MemorySequencer) dispatchSim(
 	routerAddr common.Address,
 	stateAddr common.Address,
 	action *model.ActionTransaction,
-) error {
+) (*cog.OpSet, error) {
 	client := seqr.chainHttpClient
 	// prep action data
 	actions := action.ActionBytes()
 	sig := action.ActionSig()
+	nonce := big.NewInt(0).SetUint64(action.Nonce)
 
 	sessionRouter, err := router.NewSessionRouter(routerAddr, client)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
+	simTimeout, simTimeoutCancel := context.WithTimeout(context.Background(), 14*time.Second)
+	defer simTimeoutCancel()
 	ops, err := sessionRouter.Zispatch(&bind.CallOpts{
-		Pending: true,
-	}, actions, sig)
+		Pending: false,
+		Context: simTimeout,
+	}, actions, sig, nonce)
 	if err != nil {
-		return fmt.Errorf("failed to call: %v", err)
+		return nil, fmt.Errorf("failed to call: %v", err)
 	}
 
 	// build OpSet
@@ -210,7 +242,7 @@ func (seqr *MemorySequencer) dispatchSim(
 	}
 	fakeBlockNumber, err := client.BlockNumber(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to get current block: %v", err)
+		return nil, fmt.Errorf("failed to get current block: %v", err)
 	}
 	for _, op := range ops {
 		// convert op to state Event
@@ -243,7 +275,7 @@ func (seqr *MemorySequencer) dispatchSim(
 		}
 	}
 	seqr.idxr.AddPendingOpSet(opset)
-	return nil
+	return &opset, nil
 }
 
 func (seqr *MemorySequencer) dispatch(
@@ -258,6 +290,7 @@ func (seqr *MemorySequencer) dispatch(
 
 	actions := action.ActionBytes()
 	sig := action.ActionSig()
+	nonce := big.NewInt(0).SetUint64(action.Nonce)
 
 	txOpts, err := client.NewRelayTransactor(ctx)
 	if err != nil {
@@ -275,6 +308,7 @@ func (seqr *MemorySequencer) dispatch(
 	tx, err := sessionRouter.Dispatch(txOpts,
 		actions,
 		sig,
+		nonce,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed commit batch tx: %v", err)
@@ -286,10 +320,8 @@ func (seqr *MemorySequencer) dispatch(
 
 func WaitMined(ctx context.Context, client *alchemy.Client, tx *types.Transaction) (*types.Receipt, error) {
 	// wait til batch success
-	maxWait, cancel := context.WithTimeout(ctx, 5*time.Minute)
-	defer cancel()
 	time.Sleep(50 * time.Millisecond)
-	rcpt, err := bind.WaitMined(maxWait, client, tx)
+	rcpt, err := bind.WaitMined(ctx, client, tx)
 	if err != nil {
 		return nil, err
 	}

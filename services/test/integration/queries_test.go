@@ -452,7 +452,7 @@ func dispatch(
 		OpName: "dispatch",
 		Query: `
 mutation dispatch ($gameID: ID!, $actions: [String!]!, $auth: String!) {
-	dispatch(gameID: $gameID, actions: $actions, authorization: $auth, optimistic: false) {
+	dispatch(gameID: $gameID, actions: $actions, authorization: $auth, nonce: 123, optimistic: false) {
 		id
 		status
 	}
