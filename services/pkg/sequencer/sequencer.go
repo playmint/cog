@@ -185,7 +185,9 @@ func (seqr *MemorySequencer) Enqueue(
 	}
 
 	if optimistic {
-		pending, err := seqr.dispatchSim(context.Background(), routerAddr, stateAddr, actionTx)
+		simTimeout, simTimeoutCancel := context.WithTimeout(context.Background(), 14*time.Second)
+		defer simTimeoutCancel()
+		pending, err := seqr.dispatchSim(simTimeout, routerAddr, stateAddr, actionTx)
 		if err != nil {
 			seqr.log.Error().
 				Err(err).
@@ -226,15 +228,19 @@ func (seqr *MemorySequencer) dispatchSim(
 		return nil, err
 	}
 
-	simTimeout, simTimeoutCancel := context.WithTimeout(context.Background(), 14*time.Second)
-	defer simTimeoutCancel()
+	seqr.log.Warn().
+		Uint64("nonce", action.Nonce).
+		Msg("sending-zipatch-sim")
 	ops, err := sessionRouter.Zispatch(&bind.CallOpts{
 		Pending: false,
-		Context: simTimeout,
+		Context: ctx,
 	}, actions, sig, nonce)
 	if err != nil {
 		return nil, fmt.Errorf("failed to call: %v", err)
 	}
+	seqr.log.Warn().
+		Uint64("nonce", action.Nonce).
+		Msg("done-zipatch-sim")
 
 	// build OpSet
 	opset := cog.OpSet{
@@ -244,7 +250,13 @@ func (seqr *MemorySequencer) dispatchSim(
 	if err != nil {
 		return nil, fmt.Errorf("failed to get current block: %v", err)
 	}
+	seqr.log.Warn().
+		Uint64("nonce", action.Nonce).
+		Msg("got-blocknum")
 	for _, op := range ops {
+		seqr.log.Warn().
+			Uint64("nonce", action.Nonce).
+			Msg("start-op")
 		// convert op to state Event
 		switch op.Kind {
 		case 0: // edge set
@@ -273,8 +285,17 @@ func (seqr *MemorySequencer) dispatchSim(
 				Raw:  types.Log{BlockNumber: fakeBlockNumber}, // Blockchain specific contextual infos
 			})
 		}
+		seqr.log.Warn().
+			Uint64("nonce", action.Nonce).
+			Msg("end-op")
 	}
+	seqr.log.Warn().
+		Uint64("nonce", action.Nonce).
+		Msg("add-pending-op")
 	seqr.idxr.AddPendingOpSet(opset)
+	seqr.log.Warn().
+		Uint64("nonce", action.Nonce).
+		Msg("done-pending-op")
 	return &opset, nil
 }
 

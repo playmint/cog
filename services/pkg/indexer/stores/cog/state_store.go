@@ -233,7 +233,7 @@ func (rs *StateStore) removeEdge(g *model.Graph, evt *state.StateEdgeRemove) (*m
 func (rs *StateStore) GetGraph() *model.Graph {
 	rs.Lock()
 	defer rs.Unlock()
-	return rs.GetGraph()
+	return rs.graph
 }
 
 func (rs *StateStore) AddPendingOpSet(opset OpSet) {
