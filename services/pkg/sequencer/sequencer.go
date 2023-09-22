@@ -228,9 +228,6 @@ func (seqr *MemorySequencer) dispatchSim(
 		return nil, err
 	}
 
-	seqr.log.Warn().
-		Uint64("nonce", action.Nonce).
-		Msg("sending-zipatch-sim")
 	ops, err := sessionRouter.Zispatch(&bind.CallOpts{
 		Pending: false,
 		Context: ctx,
@@ -238,9 +235,6 @@ func (seqr *MemorySequencer) dispatchSim(
 	if err != nil {
 		return nil, fmt.Errorf("failed to call: %v", err)
 	}
-	seqr.log.Warn().
-		Uint64("nonce", action.Nonce).
-		Msg("done-zipatch-sim")
 
 	// build OpSet
 	opset := cog.OpSet{
@@ -250,13 +244,8 @@ func (seqr *MemorySequencer) dispatchSim(
 	if err != nil {
 		return nil, fmt.Errorf("failed to get current block: %v", err)
 	}
-	seqr.log.Warn().
-		Uint64("nonce", action.Nonce).
-		Msg("got-blocknum")
+	fakeBlockNumber = fakeBlockNumber + 1
 	for _, op := range ops {
-		seqr.log.Warn().
-			Uint64("nonce", action.Nonce).
-			Msg("start-op")
 		// convert op to state Event
 		switch op.Kind {
 		case 0: // edge set
@@ -280,22 +269,13 @@ func (seqr *MemorySequencer) dispatchSim(
 				Id:    op.SrcNodeID,
 				Kind:  op.Kind,
 				Label: op.AnnName,
-				// Ref: , // calc as keccak of anndata
-				Data: op.AnnData,
-				Raw:  types.Log{BlockNumber: fakeBlockNumber}, // Blockchain specific contextual infos
+				Ref:   crypto.Keccak256Hash([]byte(op.AnnData)),
+				Data:  op.AnnData,
+				Raw:   types.Log{BlockNumber: fakeBlockNumber}, // Blockchain specific contextual infos
 			})
 		}
-		seqr.log.Warn().
-			Uint64("nonce", action.Nonce).
-			Msg("end-op")
 	}
-	seqr.log.Warn().
-		Uint64("nonce", action.Nonce).
-		Msg("add-pending-op")
 	seqr.idxr.AddPendingOpSet(opset)
-	seqr.log.Warn().
-		Uint64("nonce", action.Nonce).
-		Msg("done-pending-op")
 	return &opset, nil
 }
 
