@@ -105,10 +105,6 @@ func (seqr *MemorySequencer) Ready() chan struct{} {
 	return ch
 }
 
-func (seqr *MemorySequencer) emitTx(tx *model.ActionTransaction) {
-	seqr.notifications <- tx
-}
-
 // Enqueue dispatches and waits for action commit
 func (seqr *MemorySequencer) Enqueue(
 	ctx context.Context,
@@ -199,7 +195,9 @@ func (seqr *MemorySequencer) Enqueue(
 			Uint64("nonce", actionNonce).
 			Msg("action-accepted-sim")
 
-		go realDispatch(pending) // off it goes, hoping for the best
+		go (func() {
+			_ = realDispatch(pending)
+		})()
 
 	} else {
 
@@ -451,15 +449,6 @@ func (seqr *MemorySequencer) GetTransaction(routerAddr common.Address, id string
 		}
 	}
 	return nil, nil
-}
-
-func inStatusList(haystack []model.ActionTransactionStatus, needle model.ActionTransactionStatus) bool {
-	for _, hay := range haystack {
-		if needle == hay {
-			return true
-		}
-	}
-	return false
 }
 
 // - Sig and Payload are non empty
