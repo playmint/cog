@@ -275,7 +275,7 @@ func (seqr *MemorySequencer) dispatchSim(
 			})
 		}
 	}
-	seqr.idxr.AddPendingOpSet(opset)
+	seqr.idxr.AddPendingOpSet(int(fakeBlockNumber), opset)
 	return &opset, nil
 }
 

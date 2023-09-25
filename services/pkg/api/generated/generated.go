@@ -84,7 +84,7 @@ type ComplexityRoot struct {
 	BlockEvent struct {
 		Block     func(childComplexity int) int
 		ID        func(childComplexity int) int
-		Logs      func(childComplexity int) int
+		Sigs      func(childComplexity int) int
 		Simulated func(childComplexity int) int
 	}
 
@@ -390,12 +390,12 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 
 		return e.complexity.BlockEvent.ID(childComplexity), true
 
-	case "BlockEvent.logs":
-		if e.complexity.BlockEvent.Logs == nil {
+	case "BlockEvent.sigs":
+		if e.complexity.BlockEvent.Sigs == nil {
 			break
 		}
 
-		return e.complexity.BlockEvent.Logs(childComplexity), true
+		return e.complexity.BlockEvent.Sigs(childComplexity), true
 
 	case "BlockEvent.simulated":
 		if e.complexity.BlockEvent.Simulated == nil {
@@ -1504,7 +1504,7 @@ type Annotation {
 type BlockEvent implements Event {
 	id: ID!
 	block: Int!
-	logs: Int!
+	sigs: [String!]!
 	simulated: Boolean!
 }
 
@@ -2757,7 +2757,7 @@ func (ec *executionContext) _BlockEvent_block(ctx context.Context, field graphql
 	return ec.marshalNInt2int(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) _BlockEvent_logs(ctx context.Context, field graphql.CollectedField, obj *model.BlockEvent) (ret graphql.Marshaler) {
+func (ec *executionContext) _BlockEvent_sigs(ctx context.Context, field graphql.CollectedField, obj *model.BlockEvent) (ret graphql.Marshaler) {
 	defer func() {
 		if r := recover(); r != nil {
 			ec.Error(ctx, ec.Recover(ctx, r))
@@ -2775,7 +2775,7 @@ func (ec *executionContext) _BlockEvent_logs(ctx context.Context, field graphql.
 	ctx = graphql.WithFieldContext(ctx, fc)
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
 		ctx = rctx // use context from middleware stack in children
-		return obj.Logs, nil
+		return obj.Sigs, nil
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -2787,9 +2787,9 @@ func (ec *executionContext) _BlockEvent_logs(ctx context.Context, field graphql.
 		}
 		return graphql.Null
 	}
-	res := resTmp.(int)
+	res := resTmp.([]string)
 	fc.Result = res
-	return ec.marshalNInt2int(ctx, field.Selections, res)
+	return ec.marshalNString2ᚕstringᚄ(ctx, field.Selections, res)
 }
 
 func (ec *executionContext) _BlockEvent_simulated(ctx context.Context, field graphql.CollectedField, obj *model.BlockEvent) (ret graphql.Marshaler) {
@@ -7055,9 +7055,9 @@ func (ec *executionContext) _BlockEvent(ctx context.Context, sel ast.SelectionSe
 			if out.Values[i] == graphql.Null {
 				invalids++
 			}
-		case "logs":
+		case "sigs":
 			innerFunc := func(ctx context.Context) (res graphql.Marshaler) {
-				return ec._BlockEvent_logs(ctx, field, obj)
+				return ec._BlockEvent_sigs(ctx, field, obj)
 			}
 
 			out.Values[i] = innerFunc(ctx)

@@ -25,18 +25,20 @@ type StateStore struct {
 	pendingGraph  *model.Graph
 	abi           *abi.ABI
 	log           zerolog.Logger
+	notifications chan interface{}
 	pendingOpSets []OpSet
 	sync.RWMutex
 }
 
-func NewStateStore(ctx context.Context, watcher *eventwatcher.Watcher) (*StateStore, error) {
+func NewStateStore(ctx context.Context, watcher *eventwatcher.Watcher, notifications chan interface{}) (*StateStore, error) {
 	cabi, err := abi.JSON(strings.NewReader(state.StateABI))
 	if err != nil {
 		panic(err)
 	}
 	store := &StateStore{
-		abi: &cabi,
-		log: log.With().Str("service", "indexer").Str("component", "statestore").Str("name", "latest").Logger(),
+		abi:           &cabi,
+		log:           log.With().Str("service", "indexer").Str("component", "statestore").Str("name", "latest").Logger(),
+		notifications: notifications,
 	}
 	store.watch(ctx, watcher)
 	return store, nil
@@ -155,6 +157,22 @@ func (rs *StateStore) processBlock(ctx context.Context, block *eventwatcher.LogB
 	rs.graph = g
 	rs.pendingGraph = rs.rebuildPendingGraph()
 
+	// notify
+
+	sigs := []string{}
+	for sig := range seenOps {
+		sigs = append(sigs, sig)
+	}
+	rs.Notify(int(block.ToBlock), sigs, false)
+}
+
+func (rs *StateStore) Notify(blockNumber int, sigs []string, simulated bool) {
+	rs.notifications <- &model.BlockEvent{
+		ID:        fmt.Sprintf("block-%d", blockNumber),
+		Block:     blockNumber,
+		Sigs:      sigs,
+		Simulated: simulated,
+	}
 }
 
 func (rs *StateStore) watchLoop(ctx context.Context, blocks chan *eventwatcher.LogBatch) {
@@ -236,11 +254,13 @@ func (rs *StateStore) GetGraph() *model.Graph {
 	return rs.graph
 }
 
-func (rs *StateStore) AddPendingOpSet(opset OpSet) {
+func (rs *StateStore) AddPendingOpSet(estimatedBlockNumber int, opset OpSet) {
 	rs.Lock()
 	defer rs.Unlock()
 	rs.pendingOpSets = append(rs.pendingOpSets, opset)
 	rs.pendingGraph = rs.rebuildPendingGraph()
+
+	rs.Notify(estimatedBlockNumber, []string{opset.Sig}, true)
 }
 
 func (rs *StateStore) RemovePendingOpSets(seenOps map[string]bool) []OpSet {

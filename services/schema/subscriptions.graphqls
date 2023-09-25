@@ -5,7 +5,7 @@ interface Event {
 type BlockEvent implements Event {
 	id: ID!
 	block: Int!
-	logs: Int!
+	sigs: [String!]!
 	simulated: Boolean!
 }
 

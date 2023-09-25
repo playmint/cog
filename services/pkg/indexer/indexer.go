@@ -21,7 +21,7 @@ type Indexer interface {
 	GetGraph(stateContractAddr common.Address, block int, simulated bool) *model.Graph
 	GetSession(routerAddr common.Address, sessionID string) *model.Session
 	GetSessions(routerAddr common.Address, owner *string) []*model.Session
-	AddPendingOpSet(opset cog.OpSet)
+	AddPendingOpSet(estimatedBlockNumber int, opset cog.OpSet)
 	RemovePendingOpSets(opset map[string]bool)
 }
 
@@ -76,11 +76,10 @@ func NewMemoryIndexer(ctx context.Context, notifications chan interface{}, httpP
 	}
 
 	idxr.events, err = eventwatcher.New(eventwatcher.Config{
-		HTTPClient:    idxr.httpClient,
-		Websocket:     idxr.wsClient,
-		LogRange:      config.IndexerMaxLogRange,
-		Notifications: notifications,
-		Addresses:     contractAddrs,
+		HTTPClient: idxr.httpClient,
+		Websocket:  idxr.wsClient,
+		LogRange:   config.IndexerMaxLogRange,
+		Addresses:  contractAddrs,
 	})
 	if err != nil {
 		return nil, err
@@ -100,6 +99,7 @@ func NewMemoryIndexer(ctx context.Context, notifications chan interface{}, httpP
 	idxr.stateStore, err = cog.NewStateStore(
 		ctx,
 		idxr.events,
+		notifications,
 	)
 	if err != nil {
 		return nil, err
@@ -135,8 +135,8 @@ func (idxr *MemoryIndexer) GetGames() []*model.Game {
 	return idxr.gameStore.GetGames()
 }
 
-func (idxr *MemoryIndexer) AddPendingOpSet(opset cog.OpSet) {
-	idxr.stateStore.AddPendingOpSet(opset)
+func (idxr *MemoryIndexer) AddPendingOpSet(estimatedBlockNumber int, opset cog.OpSet) {
+	idxr.stateStore.AddPendingOpSet(estimatedBlockNumber, opset)
 }
 
 func (idxr *MemoryIndexer) RemovePendingOpSets(opset map[string]bool) {
