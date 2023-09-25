@@ -38,6 +38,7 @@ type Config struct {
 }
 
 type ResolverRoot interface {
+	ActionTransaction() ActionTransactionResolver
 	Game() GameResolver
 	Mutation() MutationResolver
 	Query() QueryResolver
@@ -65,6 +66,7 @@ type ComplexityRoot struct {
 	ActionTransaction struct {
 		Batch   func(childComplexity int) int
 		ID      func(childComplexity int) int
+		Nonce   func(childComplexity int) int
 		Owner   func(childComplexity int) int
 		Payload func(childComplexity int) int
 		Router  func(childComplexity int) int
@@ -82,7 +84,7 @@ type ComplexityRoot struct {
 	BlockEvent struct {
 		Block     func(childComplexity int) int
 		ID        func(childComplexity int) int
-		Logs      func(childComplexity int) int
+		Sigs      func(childComplexity int) int
 		Simulated func(childComplexity int) int
 	}
 
@@ -136,7 +138,7 @@ type ComplexityRoot struct {
 	}
 
 	Mutation struct {
-		Dispatch func(childComplexity int, gameID string, actions []string, authorization string) int
+		Dispatch func(childComplexity int, gameID string, actions []string, authorization string, nonce int, optimistic bool) int
 		Signin   func(childComplexity int, gameID string, session string, ttl int, scope string, authorization string) int
 		Signout  func(childComplexity int, gameID string, session string, authorization string) int
 		Signup   func(childComplexity int, gameID string, authorization string) int
@@ -197,6 +199,9 @@ type ComplexityRoot struct {
 	}
 }
 
+type ActionTransactionResolver interface {
+	Nonce(ctx context.Context, obj *model.ActionTransaction) (int, error)
+}
 type GameResolver interface {
 	State(ctx context.Context, obj *model.Game, block *int, simulated *bool) (*model.State, error)
 
@@ -206,7 +211,7 @@ type MutationResolver interface {
 	Signup(ctx context.Context, gameID string, authorization string) (bool, error)
 	Signin(ctx context.Context, gameID string, session string, ttl int, scope string, authorization string) (bool, error)
 	Signout(ctx context.Context, gameID string, session string, authorization string) (bool, error)
-	Dispatch(ctx context.Context, gameID string, actions []string, authorization string) (*model.ActionTransaction, error)
+	Dispatch(ctx context.Context, gameID string, actions []string, authorization string, nonce int, optimistic bool) (*model.ActionTransaction, error)
 }
 type QueryResolver interface {
 	Game(ctx context.Context, id string) (*model.Game, error)
@@ -301,6 +306,13 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 
 		return e.complexity.ActionTransaction.ID(childComplexity), true
 
+	case "ActionTransaction.nonce":
+		if e.complexity.ActionTransaction.Nonce == nil {
+			break
+		}
+
+		return e.complexity.ActionTransaction.Nonce(childComplexity), true
+
 	case "ActionTransaction.owner":
 		if e.complexity.ActionTransaction.Owner == nil {
 			break
@@ -378,12 +390,12 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 
 		return e.complexity.BlockEvent.ID(childComplexity), true
 
-	case "BlockEvent.logs":
-		if e.complexity.BlockEvent.Logs == nil {
+	case "BlockEvent.sigs":
+		if e.complexity.BlockEvent.Sigs == nil {
 			break
 		}
 
-		return e.complexity.BlockEvent.Logs(childComplexity), true
+		return e.complexity.BlockEvent.Sigs(childComplexity), true
 
 	case "BlockEvent.simulated":
 		if e.complexity.BlockEvent.Simulated == nil {
@@ -624,7 +636,7 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 			return 0, false
 		}
 
-		return e.complexity.Mutation.Dispatch(childComplexity, args["gameID"].(string), args["actions"].([]string), args["authorization"].(string)), true
+		return e.complexity.Mutation.Dispatch(childComplexity, args["gameID"].(string), args["actions"].([]string), args["authorization"].(string), args["nonce"].(int), args["optimistic"].(bool)), true
 
 	case "Mutation.signin":
 		if e.complexity.Mutation.Signin == nil {
@@ -1119,34 +1131,34 @@ type Game {
 	subscribers: Int!
 }
 `, BuiltIn: false},
-	{Name: "schema/mutations.graphqls", Input: `
-type Mutation {
+	{Name: "schema/mutations.graphqls", Input: `type Mutation {
 	signup(
-		gameID: ID!,            # which game to route to
-		authorization: String!, # owner's real wallet signature of request
+		gameID: ID! # which game to route to
+		authorization: String! # owner's real wallet signature of request
 	): Boolean!
 
 	signin(
-		gameID: ID!,            # which game to route to
-		session: String!,       # session public key address
-		ttl: Int!,              # blocks
-		scope: String!,         # permissions to grant session, set to 0xffffffff for FULL_ACCESS
-		authorization: String!, # owner's real wallet signature of request
+		gameID: ID! # which game to route to
+		session: String! # session public key address
+		ttl: Int! # blocks
+		scope: String! # permissions to grant session, set to 0xffffffff for FULL_ACCESS
+		authorization: String! # owner's real wallet signature of request
 	): Boolean!
 
 	signout(
-		gameID: ID!,            # which game to route to
-		session: String!,       # session public key address
-		authorization: String!  # owner's real wallet signature of request
+		gameID: ID! # which game to route to
+		session: String! # session public key address
+		authorization: String! # owner's real wallet signature of request
 	): Boolean!
 
 	dispatch(
-		gameID: ID!,            # which game to route to
-		actions: [String!]!,     # encoded action bytes
-		authorization: String!  # session's signature of request
+		gameID: ID! # which game to route to
+		actions: [String!]! # encoded action bytes
+		authorization: String! # session's signature of request
+		nonce: Int!
+		optimistic: Boolean! # if true returns as soon as got a simulated result, if false waits for a real confirmation
 	): ActionTransaction!
 }
-
 `, BuiltIn: false},
 	{Name: "schema/query.graphqls", Input: `
 type Query {
@@ -1177,6 +1189,7 @@ type ActionTransaction {
 	router: Router!
 	batch: ActionBatch!
 	status: ActionTransactionStatus! # same as batch.status
+	nonce: Int!
 }
 
 type SessionScope {
@@ -1194,7 +1207,10 @@ type Router {
 	id: ID! # contract address of Router
 	sessions(owner: String): [Session!]! @goField(forceResolver: true)
 	session(id: ID!): Session @goField(forceResolver: true)
-	transactions(owner: String, status: [ActionTransactionStatus!]): [ActionTransaction!]! @goField(forceResolver: true)
+	transactions(
+		owner: String
+		status: [ActionTransactionStatus!]
+	): [ActionTransaction!]! @goField(forceResolver: true)
 	transaction(id: ID!): ActionTransaction @goField(forceResolver: true)
 }
 `, BuiltIn: false},
@@ -1488,7 +1504,7 @@ type Annotation {
 type BlockEvent implements Event {
 	id: ID!
 	block: Int!
-	logs: Int!
+	sigs: [String!]!
 	simulated: Boolean!
 }
 
@@ -1559,6 +1575,24 @@ func (ec *executionContext) field_Mutation_dispatch_args(ctx context.Context, ra
 		}
 	}
 	args["authorization"] = arg2
+	var arg3 int
+	if tmp, ok := rawArgs["nonce"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("nonce"))
+		arg3, err = ec.unmarshalNInt2int(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["nonce"] = arg3
+	var arg4 bool
+	if tmp, ok := rawArgs["optimistic"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("optimistic"))
+		arg4, err = ec.unmarshalNBoolean2bool(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["optimistic"] = arg4
 	return args, nil
 }
 
@@ -2478,6 +2512,41 @@ func (ec *executionContext) _ActionTransaction_status(ctx context.Context, field
 	return ec.marshalNActionTransactionStatus2githubᚗcomᚋplaymintᚋdsᚑnodeᚋpkgᚋapiᚋmodelᚐActionTransactionStatus(ctx, field.Selections, res)
 }
 
+func (ec *executionContext) _ActionTransaction_nonce(ctx context.Context, field graphql.CollectedField, obj *model.ActionTransaction) (ret graphql.Marshaler) {
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	fc := &graphql.FieldContext{
+		Object:     "ActionTransaction",
+		Field:      field,
+		Args:       nil,
+		IsMethod:   true,
+		IsResolver: true,
+	}
+
+	ctx = graphql.WithFieldContext(ctx, fc)
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.ActionTransaction().Nonce(rctx, obj)
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(int)
+	fc.Result = res
+	return ec.marshalNInt2int(ctx, field.Selections, res)
+}
+
 func (ec *executionContext) _Annotation_id(ctx context.Context, field graphql.CollectedField, obj *model.Annotation) (ret graphql.Marshaler) {
 	defer func() {
 		if r := recover(); r != nil {
@@ -2688,7 +2757,7 @@ func (ec *executionContext) _BlockEvent_block(ctx context.Context, field graphql
 	return ec.marshalNInt2int(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) _BlockEvent_logs(ctx context.Context, field graphql.CollectedField, obj *model.BlockEvent) (ret graphql.Marshaler) {
+func (ec *executionContext) _BlockEvent_sigs(ctx context.Context, field graphql.CollectedField, obj *model.BlockEvent) (ret graphql.Marshaler) {
 	defer func() {
 		if r := recover(); r != nil {
 			ec.Error(ctx, ec.Recover(ctx, r))
@@ -2706,7 +2775,7 @@ func (ec *executionContext) _BlockEvent_logs(ctx context.Context, field graphql.
 	ctx = graphql.WithFieldContext(ctx, fc)
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
 		ctx = rctx // use context from middleware stack in children
-		return obj.Logs, nil
+		return obj.Sigs, nil
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -2718,9 +2787,9 @@ func (ec *executionContext) _BlockEvent_logs(ctx context.Context, field graphql.
 		}
 		return graphql.Null
 	}
-	res := resTmp.(int)
+	res := resTmp.([]string)
 	fc.Result = res
-	return ec.marshalNInt2int(ctx, field.Selections, res)
+	return ec.marshalNString2ᚕstringᚄ(ctx, field.Selections, res)
 }
 
 func (ec *executionContext) _BlockEvent_simulated(ctx context.Context, field graphql.CollectedField, obj *model.BlockEvent) (ret graphql.Marshaler) {
@@ -4001,7 +4070,7 @@ func (ec *executionContext) _Mutation_dispatch(ctx context.Context, field graphq
 	fc.Args = args
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
 		ctx = rctx // use context from middleware stack in children
-		return ec.resolvers.Mutation().Dispatch(rctx, args["gameID"].(string), args["actions"].([]string), args["authorization"].(string))
+		return ec.resolvers.Mutation().Dispatch(rctx, args["gameID"].(string), args["actions"].([]string), args["authorization"].(string), args["nonce"].(int), args["optimistic"].(bool))
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -6802,7 +6871,7 @@ func (ec *executionContext) _ActionTransaction(ctx context.Context, sel ast.Sele
 			out.Values[i] = innerFunc(ctx)
 
 			if out.Values[i] == graphql.Null {
-				invalids++
+				atomic.AddUint32(&invalids, 1)
 			}
 		case "payload":
 			innerFunc := func(ctx context.Context) (res graphql.Marshaler) {
@@ -6812,7 +6881,7 @@ func (ec *executionContext) _ActionTransaction(ctx context.Context, sel ast.Sele
 			out.Values[i] = innerFunc(ctx)
 
 			if out.Values[i] == graphql.Null {
-				invalids++
+				atomic.AddUint32(&invalids, 1)
 			}
 		case "sig":
 			innerFunc := func(ctx context.Context) (res graphql.Marshaler) {
@@ -6822,7 +6891,7 @@ func (ec *executionContext) _ActionTransaction(ctx context.Context, sel ast.Sele
 			out.Values[i] = innerFunc(ctx)
 
 			if out.Values[i] == graphql.Null {
-				invalids++
+				atomic.AddUint32(&invalids, 1)
 			}
 		case "owner":
 			innerFunc := func(ctx context.Context) (res graphql.Marshaler) {
@@ -6832,7 +6901,7 @@ func (ec *executionContext) _ActionTransaction(ctx context.Context, sel ast.Sele
 			out.Values[i] = innerFunc(ctx)
 
 			if out.Values[i] == graphql.Null {
-				invalids++
+				atomic.AddUint32(&invalids, 1)
 			}
 		case "router":
 			innerFunc := func(ctx context.Context) (res graphql.Marshaler) {
@@ -6842,7 +6911,7 @@ func (ec *executionContext) _ActionTransaction(ctx context.Context, sel ast.Sele
 			out.Values[i] = innerFunc(ctx)
 
 			if out.Values[i] == graphql.Null {
-				invalids++
+				atomic.AddUint32(&invalids, 1)
 			}
 		case "batch":
 			innerFunc := func(ctx context.Context) (res graphql.Marshaler) {
@@ -6852,7 +6921,7 @@ func (ec *executionContext) _ActionTransaction(ctx context.Context, sel ast.Sele
 			out.Values[i] = innerFunc(ctx)
 
 			if out.Values[i] == graphql.Null {
-				invalids++
+				atomic.AddUint32(&invalids, 1)
 			}
 		case "status":
 			innerFunc := func(ctx context.Context) (res graphql.Marshaler) {
@@ -6862,8 +6931,28 @@ func (ec *executionContext) _ActionTransaction(ctx context.Context, sel ast.Sele
 			out.Values[i] = innerFunc(ctx)
 
 			if out.Values[i] == graphql.Null {
-				invalids++
+				atomic.AddUint32(&invalids, 1)
 			}
+		case "nonce":
+			field := field
+
+			innerFunc := func(ctx context.Context) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._ActionTransaction_nonce(ctx, field, obj)
+				if res == graphql.Null {
+					atomic.AddUint32(&invalids, 1)
+				}
+				return res
+			}
+
+			out.Concurrently(i, func() graphql.Marshaler {
+				return innerFunc(ctx)
+
+			})
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
@@ -6966,9 +7055,9 @@ func (ec *executionContext) _BlockEvent(ctx context.Context, sel ast.SelectionSe
 			if out.Values[i] == graphql.Null {
 				invalids++
 			}
-		case "logs":
+		case "sigs":
 			innerFunc := func(ctx context.Context) (res graphql.Marshaler) {
-				return ec._BlockEvent_logs(ctx, field, obj)
+				return ec._BlockEvent_sigs(ctx, field, obj)
 			}
 
 			out.Values[i] = innerFunc(ctx)

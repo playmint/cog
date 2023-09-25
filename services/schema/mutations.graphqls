@@ -1,28 +1,28 @@
-
 type Mutation {
 	signup(
-		gameID: ID!,            # which game to route to
-		authorization: String!, # owner's real wallet signature of request
+		gameID: ID! # which game to route to
+		authorization: String! # owner's real wallet signature of request
 	): Boolean!
 
 	signin(
-		gameID: ID!,            # which game to route to
-		session: String!,       # session public key address
-		ttl: Int!,              # blocks
-		scope: String!,         # permissions to grant session, set to 0xffffffff for FULL_ACCESS
-		authorization: String!, # owner's real wallet signature of request
+		gameID: ID! # which game to route to
+		session: String! # session public key address
+		ttl: Int! # blocks
+		scope: String! # permissions to grant session, set to 0xffffffff for FULL_ACCESS
+		authorization: String! # owner's real wallet signature of request
 	): Boolean!
 
 	signout(
-		gameID: ID!,            # which game to route to
-		session: String!,       # session public key address
-		authorization: String!  # owner's real wallet signature of request
+		gameID: ID! # which game to route to
+		session: String! # session public key address
+		authorization: String! # owner's real wallet signature of request
 	): Boolean!
 
 	dispatch(
-		gameID: ID!,            # which game to route to
-		actions: [String!]!,     # encoded action bytes
-		authorization: String!  # session's signature of request
+		gameID: ID! # which game to route to
+		actions: [String!]! # encoded action bytes
+		authorization: String! # session's signature of request
+		nonce: Int!
+		optimistic: Boolean! # if true returns as soon as got a simulated result, if false waits for a real confirmation
 	): ActionTransaction!
 }
-

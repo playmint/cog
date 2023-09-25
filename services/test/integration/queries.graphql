@@ -28,10 +28,12 @@ query getSessionByID($gameID: ID!, $session: ID!) {
 query getSeekers($gameID: ID!) {
 	game(id: $gameID) {
 		state {
-			seekers: nodes(match: {kinds: ["Seeker"]}) {
+			seekers: nodes(match: { kinds: ["Seeker"] }) {
 				id
 				kind
-				position: node(match: {via: [{rel: "Location"}], kinds: ["Tile"]}) {
+				position: node(
+					match: { via: [{ rel: "Location" }], kinds: ["Tile"] }
+				) {
 					keys
 				}
 			}
@@ -63,30 +65,27 @@ query getTransactionByID($gameID: ID!, $id: ID!) {
 
 mutation signin($gameID: ID!, $session: String!, $auth: String!) {
 	signin(
-		gameID: $gameID,
-		session: $session,
-		ttl: 1000,
-		scope: "0xffffffff",
-		authorization: $auth,
+		gameID: $gameID
+		session: $session
+		ttl: 1000
+		scope: "0xffffffff"
+		authorization: $auth
 	)
 }
 
 mutation signout($gameID: ID!, $session: String!, $auth: String!) {
-	signout(
-		gameID: $gameID,
-		session: $session,
-		authorization: $auth,
-	)
+	signout(gameID: $gameID, session: $session, authorization: $auth)
 }
 
 mutation dispatch($gameID: ID!, $actions: [String!]!, $auth: String!) {
 	dispatch(
-		gameID: $gameID,
-		actions: $actions,       # encoded action bytes
-		authorization: $auth    # session's signature of $action
+		gameID: $gameID
+		actions: $actions # encoded action bytes
+		authorization: $auth # session's signature of $action
+		nonce: 123
+		optimistic: false
 	) {
 		id
 		status
 	}
 }
-

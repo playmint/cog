@@ -17,8 +17,11 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/playmint/ds-node/pkg/api/model"
 	"github.com/playmint/ds-node/pkg/client/alchemy"
+	"github.com/playmint/ds-node/pkg/config"
 	"github.com/playmint/ds-node/pkg/contracts/router"
+	"github.com/playmint/ds-node/pkg/contracts/state"
 	"github.com/playmint/ds-node/pkg/indexer"
+	"github.com/playmint/ds-node/pkg/indexer/stores/cog"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	uuid "github.com/satori/go.uuid"
@@ -34,6 +37,8 @@ type Sequencer interface {
 		stateAddress common.Address,
 		actionPayload []string,
 		actionSig string,
+		actionNonce uint64,
+		optimistic bool,
 	) (*model.ActionTransaction, error)
 	Signin(
 		ctx context.Context,
@@ -59,6 +64,7 @@ type MemorySequencer struct {
 	notifications     chan interface{}
 	idxr              indexer.Indexer
 	log               zerolog.Logger
+	pendingSim        bool
 }
 
 func NewMemorySequencer(
@@ -86,6 +92,7 @@ func NewMemorySequencer(
 	if err != nil {
 		return nil, err
 	}
+	seqr.pendingSim = config.SequencerPendingSim
 
 	return seqr, nil
 }
@@ -98,10 +105,6 @@ func (seqr *MemorySequencer) Ready() chan struct{} {
 	return ch
 }
 
-func (seqr *MemorySequencer) emitTx(tx *model.ActionTransaction) {
-	seqr.notifications <- tx
-}
-
 // Enqueue dispatches and waits for action commit
 func (seqr *MemorySequencer) Enqueue(
 	ctx context.Context,
@@ -109,6 +112,8 @@ func (seqr *MemorySequencer) Enqueue(
 	stateAddr common.Address,
 	actionData []string,
 	actionSig string,
+	actionNonce uint64,
+	optimistic bool,
 ) (*model.ActionTransaction, error) {
 	if routerAddr.Hex() == "" || len(actionData) == 0 || actionSig == "" {
 		return nil, fmt.Errorf("invalid action data")
@@ -118,81 +123,204 @@ func (seqr *MemorySequencer) Enqueue(
 		ID:            uuid.NewV4().String(),
 		Payload:       actionData,
 		Sig:           actionSig,
+		Nonce:         actionNonce,
 		RouterAddress: routerAddr.Hex(),
 		Batch:         &model.ActionBatch{},
 	}
 
-	tx, err := seqr.dispatch(context.Background(), routerAddr, actionTx)
-	if err != nil {
-		seqr.log.Error().
-			Err(err).
-			Msg("action-rejected")
-		return actionTx, err
-	}
+	realDispatch := func(opset *cog.OpSet) error {
+		sendTimeout, sendCancel := context.WithTimeout(context.Background(), 5*time.Minute)
+		defer sendCancel()
+		tx, err := seqr.dispatch(sendTimeout, routerAddr, stateAddr, actionTx)
+		if err != nil {
+			// TODO: if we have timedout here, it's still possible that a tx is
+			// in the mempool and blocking future tx ... we probably need to
+			// cancel the tx
+			seqr.log.Error().
+				Err(err).
+				Uint64("nonce", actionNonce).
+				Msg("action-rejected-chain")
+			if optimistic && opset != nil {
+				seqr.log.Error().
+					Str("opset", opset.Sig).
+					Uint64("nonce", actionNonce).
+					Msg("remove-stale-pending")
+				seqr.idxr.RemovePendingOpSets(map[string]bool{
+					opset.Sig: true,
+				})
+			}
+			return err
+		}
 
-	_, err = WaitMined(ctx, seqr.chainHttpClient, tx)
-	if err != nil {
-		seqr.log.Error().
-			Err(err).
+		seqr.log.Info().
 			Str("hash", tx.Hash().Hex()).
-			Msg("action-fail")
-		return actionTx, err
+			Uint64("nonce", actionNonce).
+			Msg("action-accepted-chain")
+
+		maxWaitMined, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+		defer cancel()
+		_, err = WaitMined(maxWaitMined, seqr.chainHttpClient, tx)
+		if err != nil {
+			seqr.log.Error().
+				Err(err).
+				Str("hash", tx.Hash().Hex()).
+				Uint64("nonce", actionNonce).
+				Msg("action-fail")
+			if optimistic && opset != nil {
+				seqr.idxr.RemovePendingOpSets(map[string]bool{
+					opset.Sig: true,
+				})
+			}
+			return err
+		}
+		seqr.log.Info().
+			Str("hash", tx.Hash().Hex()).
+			Uint64("nonce", actionNonce).
+			Msg("action-success")
+		return nil
 	}
 
-	seqr.log.Info().
-		Str("hash", tx.Hash().Hex()).
-		Msg("action-commited")
+	if optimistic {
+		simTimeout, simTimeoutCancel := context.WithTimeout(context.Background(), 14*time.Second)
+		defer simTimeoutCancel()
+		pending, err := seqr.dispatchSim(simTimeout, routerAddr, stateAddr, actionTx)
+		if err != nil {
+			seqr.log.Error().
+				Err(err).
+				Uint64("nonce", actionNonce).
+				Msg("action-rejected-sim")
+			return actionTx, err
+		}
+		seqr.log.Info().
+			Uint64("nonce", actionNonce).
+			Msg("action-accepted-sim")
+
+		go (func() {
+			_ = realDispatch(pending)
+		})()
+
+	} else {
+
+		if err := realDispatch(nil); err != nil {
+			return nil, err
+		}
+	}
 
 	return actionTx, nil
 }
 
-func (seqr *MemorySequencer) dispatch(
+func (seqr *MemorySequencer) dispatchSim(
 	ctx context.Context,
 	routerAddr common.Address,
+	stateAddr common.Address,
 	action *model.ActionTransaction,
-) (*types.Transaction, error) {
-	// lock client
+) (*cog.OpSet, error) {
 	client := seqr.chainHttpClient
-	client.Lock()
-	defer client.Unlock()
 	// prep action data
-	actions := [][][]byte{}
-	sigs := [][]byte{}
-	actions = append(actions, action.ActionBytes())
-	sigs = append(sigs, action.ActionSig())
+	actions := action.ActionBytes()
+	sig := action.ActionSig()
+	nonce := big.NewInt(0).SetUint64(action.Nonce)
 
 	sessionRouter, err := router.NewSessionRouter(routerAddr, client)
 	if err != nil {
 		return nil, err
 	}
 
+	ops, err := sessionRouter.Zispatch(&bind.CallOpts{
+		Pending: false,
+		Context: ctx,
+	}, actions, sig, nonce)
+	if err != nil {
+		return nil, fmt.Errorf("failed to call: %v", err)
+	}
+
+	// build OpSet
+	opset := cog.OpSet{
+		Sig: action.Sig,
+	}
+	fakeBlockNumber, err := client.BlockNumber(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get current block: %v", err)
+	}
+	fakeBlockNumber = fakeBlockNumber + 1
+	for _, op := range ops {
+		// convert op to state Event
+		switch op.Kind {
+		case 0: // edge set
+			opset.Ops = append(opset.Ops, &state.StateEdgeSet{
+				RelID:     op.RelID,
+				RelKey:    op.RelKey,
+				SrcNodeID: op.SrcNodeID,
+				DstNodeID: op.DstNodeID,
+				Weight:    op.Weight,
+				Raw:       types.Log{BlockNumber: fakeBlockNumber}, // Blockchain specific contextual infos
+			})
+		case 1: // edge remove
+			opset.Ops = append(opset.Ops, &state.StateEdgeRemove{
+				RelID:     op.RelID,
+				RelKey:    op.RelKey,
+				SrcNodeID: op.SrcNodeID,
+				Raw:       types.Log{BlockNumber: fakeBlockNumber}, // Blockchain specific contextual infos
+			})
+		case 2: // ann set
+			opset.Ops = append(opset.Ops, &state.StateAnnotationSet{
+				Id:    op.SrcNodeID,
+				Kind:  op.Kind,
+				Label: op.AnnName,
+				Ref:   crypto.Keccak256Hash([]byte(op.AnnData)),
+				Data:  op.AnnData,
+				Raw:   types.Log{BlockNumber: fakeBlockNumber}, // Blockchain specific contextual infos
+			})
+		}
+	}
+	seqr.idxr.AddPendingOpSet(int(fakeBlockNumber), opset)
+	return &opset, nil
+}
+
+func (seqr *MemorySequencer) dispatch(
+	ctx context.Context,
+	routerAddr common.Address,
+	stateAddr common.Address,
+	action *model.ActionTransaction,
+) (*types.Transaction, error) {
+	client := seqr.chainHttpClient
+	client.Lock()
+	defer client.Unlock()
+
+	actions := action.ActionBytes()
+	sig := action.ActionSig()
+	nonce := big.NewInt(0).SetUint64(action.Nonce)
+
 	txOpts, err := client.NewRelayTransactor(ctx)
 	if err != nil {
 		return nil, err
 	}
-
 	txOpts.Context = ctx
 	txOpts.Value = big.NewInt(0)
 	txOpts.GasLimit = uint64(20000000)
 	txOpts.GasPrice = big.NewInt(1000000500)
 
+	sessionRouter, err := router.NewSessionRouter(routerAddr, client)
+	if err != nil {
+		return nil, err
+	}
 	tx, err := sessionRouter.Dispatch(txOpts,
 		actions,
-		sigs,
+		sig,
+		nonce,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed commit batch tx: %v", err)
 	}
 	client.IncrementRelayNonce(ctx)
+
 	return tx, nil
 }
 
 func WaitMined(ctx context.Context, client *alchemy.Client, tx *types.Transaction) (*types.Receipt, error) {
 	// wait til batch success
-	maxWait, cancel := context.WithTimeout(ctx, 5*time.Minute)
-	defer cancel()
 	time.Sleep(50 * time.Millisecond)
-	rcpt, err := bind.WaitMined(maxWait, client, tx)
+	rcpt, err := bind.WaitMined(ctx, client, tx)
 	if err != nil {
 		return nil, err
 	}
@@ -321,15 +449,6 @@ func (seqr *MemorySequencer) GetTransaction(routerAddr common.Address, id string
 		}
 	}
 	return nil, nil
-}
-
-func inStatusList(haystack []model.ActionTransactionStatus, needle model.ActionTransactionStatus) bool {
-	for _, hay := range haystack {
-		if needle == hay {
-			return true
-		}
-	}
-	return false
 }
 
 // - Sig and Payload are non empty

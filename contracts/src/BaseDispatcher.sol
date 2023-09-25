@@ -5,6 +5,7 @@ import "./IState.sol";
 import "./IDispatcher.sol";
 import "./IRouter.sol";
 import "./IRule.sol";
+import {Op, BaseState} from "./BaseState.sol";
 
 // BaseDispatcher implements some basic structure around registering ActionTypes
 // and Rules and executing those rules in the defined order against a given State
@@ -19,7 +20,7 @@ contract BaseDispatcher is Dispatcher {
     mapping(Router => bool) private trustedRouters;
     mapping(string => address) private actionAddrs;
     Rule[] private rules;
-    State private state;
+    BaseState private state;
 
     constructor() {
         // allow calling ourself
@@ -56,14 +57,15 @@ contract BaseDispatcher is Dispatcher {
     }
 
     function _registerState(State s) internal {
-        state = s;
+        state = BaseState(address(s));
     }
 
     function isRegisteredRouter(address r) internal view returns (bool) {
         return trustedRouters[Router(r)];
     }
 
-    function dispatch(bytes calldata action, Context calldata ctx) public {
+    function dispatch(bytes calldata action, Context calldata ctx) public returns (Op[] memory) {
+        uint256 fromHead = state.getHead();
         // check ctx can be trusted
         // we trust ctx built from ourself see the dispatch(action) function above that builds a full-access session for the msg.sender
         // we trust ctx built from any registered routers
@@ -77,23 +79,31 @@ contract BaseDispatcher is Dispatcher {
             address(ctx.sender),
             "<nonce>" // TODO: unique ids, nonces, and replay protection
         );
+        uint256 toHead = state.getHead();
+        return state.getOps(fromHead, toHead);
     }
 
     // dispatch from router trusted context
-    function dispatch(bytes[] calldata actions, Context calldata ctx) public {
+    function dispatch(bytes[] calldata actions, Context calldata ctx) public returns (Op[] memory) {
+        uint256 fromHead = state.getHead();
         for (uint256 i = 0; i < actions.length; i++) {
             dispatch(actions[i], ctx);
         }
+        uint256 toHead = state.getHead();
+        return state.getOps(fromHead, toHead);
     }
 
-    function dispatch(bytes calldata action) public {
+    function dispatch(bytes calldata action) public returns (Op[] memory) {
         Context memory ctx = Context({sender: msg.sender, scopes: SCOPE_FULL_ACCESS, clock: uint32(block.number)});
-        this.dispatch(action, ctx);
+        return this.dispatch(action, ctx);
     }
 
-    function dispatch(bytes[] calldata actions) public {
+    function dispatch(bytes[] calldata actions) public returns (Op[] memory) {
+        uint256 fromHead = state.getHead();
         for (uint256 i = 0; i < actions.length; i++) {
             dispatch(actions[i]);
         }
+        uint256 toHead = state.getHead();
+        return state.getOps(fromHead, toHead);
     }
 }

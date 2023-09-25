@@ -61,6 +61,9 @@ contract BaseGameTest is Test {
         game.getRouter().authorizeAddr(game.getDispatcher(), MAX_TTL, SCOPE_FULL_ACCESS, sessionAddr);
         vm.stopPrank();
 
+        // pick a random nonce
+        uint256 nonce = 4;
+
         // encode an action bundle
         bytes[] memory actions = new bytes[](2);
         actions[0] = abi.encodeCall(TestActions.SET_BYTES, ("MAGIC_BYTES"));
@@ -68,7 +71,7 @@ contract BaseGameTest is Test {
 
         // sign the action bundle with the sessionKey
         vm.startPrank(sessionAddr);
-        (uint8 v, bytes32 r, bytes32 s) = sign(actions, sessionKey);
+        (uint8 v, bytes32 r, bytes32 s) = sign(actions, nonce, sessionKey);
         bytes memory sig = abi.encodePacked(r, s, v);
         vm.stopPrank();
 
@@ -80,7 +83,7 @@ contract BaseGameTest is Test {
 
         // dispatch the batch via a relayer
         vm.startPrank(relayAddr);
-        game.getRouter().dispatch(batchedActions, batchedSigs);
+        game.getRouter().dispatch(batchedActions[0], batchedSigs[0], nonce);
         vm.stopPrank();
 
         // check that the state was modified as a reult of running
@@ -95,8 +98,13 @@ contract BaseGameTest is Test {
         assertEq(metadata.url, "http://localhost:3000/");
     }
 
-    function sign(bytes[] memory actions, uint256 privateKey) private pure returns (uint8 v, bytes32 r, bytes32 s) {
-        bytes32 digest = keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n32", keccak256(abi.encode(actions))));
+    function sign(bytes[] memory actions, uint256 nonce, uint256 privateKey)
+        private
+        pure
+        returns (uint8 v, bytes32 r, bytes32 s)
+    {
+        bytes32 digest =
+            keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n32", keccak256(abi.encode(actions, nonce))));
         return vm.sign(privateKey, digest);
     }
 }

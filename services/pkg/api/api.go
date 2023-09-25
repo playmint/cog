@@ -48,6 +48,7 @@ func (api *Server) Start(ctx context.Context, subscriptions *model.Subscriptions
 	router.Use(cors.New(cors.Options{
 		AllowedOrigins:   []string{"*"}, // FIXME: this is lazy and potentially bad, allow setting from env/config
 		AllowCredentials: true,
+		MaxAge:           86400,
 		Debug:            false,
 	}).Handler)
 
@@ -66,7 +67,7 @@ func (api *Server) Start(ctx context.Context, subscriptions *model.Subscriptions
 			WriteBufferSize: 1024,
 		},
 	})
-	srv.SetQueryCache(lru.New(1000))
+	// srv.SetQueryCache(lru.New(1000))
 	srv.Use(hooks.Prometheus{})
 	srv.Use(extension.Introspection{})
 	srv.Use(extension.AutomaticPersistedQuery{

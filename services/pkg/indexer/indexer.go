@@ -21,6 +21,8 @@ type Indexer interface {
 	GetGraph(stateContractAddr common.Address, block int, simulated bool) *model.Graph
 	GetSession(routerAddr common.Address, sessionID string) *model.Session
 	GetSessions(routerAddr common.Address, owner *string) []*model.Session
+	AddPendingOpSet(estimatedBlockNumber int, opset cog.OpSet)
+	RemovePendingOpSets(opset map[string]bool)
 }
 
 var _ Indexer = &MemoryIndexer{}
@@ -61,11 +63,23 @@ func NewMemoryIndexer(ctx context.Context, notifications chan interface{}, httpP
 		return nil, err
 	}
 
+	var contractAddrs []common.Address
+	empty := common.Address{}
+	if config.IndexerStateAddress != empty {
+		contractAddrs = append(contractAddrs, config.IndexerStateAddress)
+	}
+	if config.IndexerGameAddress != empty {
+		contractAddrs = append(contractAddrs, config.IndexerGameAddress)
+	}
+	if config.IndexerRouterAddress != empty {
+		contractAddrs = append(contractAddrs, config.IndexerRouterAddress)
+	}
+
 	idxr.events, err = eventwatcher.New(eventwatcher.Config{
-		HTTPClient:    idxr.httpClient,
-		Websocket:     idxr.wsClient,
-		LogRange:      config.IndexerMaxLogRange,
-		Notifications: notifications,
+		HTTPClient: idxr.httpClient,
+		Websocket:  idxr.wsClient,
+		LogRange:   config.IndexerMaxLogRange,
+		Addresses:  contractAddrs,
 	})
 	if err != nil {
 		return nil, err
@@ -85,6 +99,7 @@ func NewMemoryIndexer(ctx context.Context, notifications chan interface{}, httpP
 	idxr.stateStore, err = cog.NewStateStore(
 		ctx,
 		idxr.events,
+		notifications,
 	)
 	if err != nil {
 		return nil, err
@@ -120,8 +135,19 @@ func (idxr *MemoryIndexer) GetGames() []*model.Game {
 	return idxr.gameStore.GetGames()
 }
 
+func (idxr *MemoryIndexer) AddPendingOpSet(estimatedBlockNumber int, opset cog.OpSet) {
+	idxr.stateStore.AddPendingOpSet(estimatedBlockNumber, opset)
+}
+
+func (idxr *MemoryIndexer) RemovePendingOpSets(opset map[string]bool) {
+	idxr.stateStore.RemovePendingOpSets(opset)
+}
+
 func (idxr *MemoryIndexer) GetGraph(stateContractAddr common.Address, block int, simulated bool) *model.Graph {
-	return idxr.stateStore.GetGraph(stateContractAddr, block)
+	if simulated {
+		return idxr.stateStore.GetPendingGraph()
+	}
+	return idxr.stateStore.GetGraph()
 }
 func (idxr *MemoryIndexer) GetSession(routerAddr common.Address, sessionID string) *model.Session {
 	return idxr.sessionStore.GetSession(routerAddr, sessionID)

@@ -2,12 +2,11 @@ package cog
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"sync"
 
-	"github.com/benbjohnson/immutable"
 	"github.com/ethereum/go-ethereum/accounts/abi"
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/playmint/ds-node/pkg/api/model"
 	"github.com/playmint/ds-node/pkg/contracts/state"
@@ -16,25 +15,30 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+type OpSet struct {
+	Sig string
+	Ops []interface{}
+}
+
 type StateStore struct {
-	wg     map[uint64]*sync.WaitGroup
-	graphs *immutable.Map[uint64, *immutable.Map[string, *model.Graph]]
-	latest uint64
-	abi    *abi.ABI
-	log    zerolog.Logger
+	graph         *model.Graph
+	pendingGraph  *model.Graph
+	abi           *abi.ABI
+	log           zerolog.Logger
+	notifications chan interface{}
+	pendingOpSets []OpSet
 	sync.RWMutex
 }
 
-func NewStateStore(ctx context.Context, watcher *eventwatcher.Watcher) (*StateStore, error) {
+func NewStateStore(ctx context.Context, watcher *eventwatcher.Watcher, notifications chan interface{}) (*StateStore, error) {
 	cabi, err := abi.JSON(strings.NewReader(state.StateABI))
 	if err != nil {
 		panic(err)
 	}
 	store := &StateStore{
-		graphs: immutable.NewMap[uint64, *immutable.Map[string, *model.Graph]](nil),
-		wg:     map[uint64]*sync.WaitGroup{},
-		abi:    &cabi,
-		log:    log.With().Str("service", "indexer").Str("component", "statestore").Str("name", "latest").Logger(),
+		abi:           &cabi,
+		log:           log.With().Str("service", "indexer").Str("component", "statestore").Str("name", "latest").Logger(),
+		notifications: notifications,
 	}
 	store.watch(ctx, watcher)
 	return store, nil
@@ -48,6 +52,7 @@ func (rs *StateStore) watch(ctx context.Context, watcher *eventwatcher.Watcher) 
 		rs.abi.Events["NodeTypeRegister"].ID,
 		rs.abi.Events["EdgeTypeRegister"].ID,
 		rs.abi.Events["AnnotationSet"].ID,
+		rs.abi.Events["SeenOpSet"].ID,
 	}}
 	topics, err := abi.MakeTopics(query...)
 	if err != nil {
@@ -60,10 +65,13 @@ func (rs *StateStore) watch(ctx context.Context, watcher *eventwatcher.Watcher) 
 func (rs *StateStore) processBlock(ctx context.Context, block *eventwatcher.LogBatch) {
 	rs.Lock()
 	defer rs.Unlock()
-	graphs, ok := rs.graphs.Get(rs.latest)
-	if !ok {
-		graphs = immutable.NewMap[string, *model.Graph](nil)
+
+	g := rs.graph
+	if g == nil {
+		g = model.NewGraph(0)
 	}
+
+	seenOps := map[string]bool{}
 	for _, rawEvent := range block.Logs {
 		if rawEvent.Removed {
 			// FIXME: ignoring reorg
@@ -74,10 +82,6 @@ func (rs *StateStore) processBlock(ctx context.Context, block *eventwatcher.LogB
 		if err != nil {
 			rs.log.Debug().Msgf("unhandleable event topic: %v", err)
 			continue
-		}
-		g, ok := graphs.Get(rawEvent.Address.Hex())
-		if !ok {
-			g = model.NewGraph(rawEvent.BlockNumber)
 		}
 		rs.log.Debug().Msgf("recv %v", eventABI.RawName)
 		switch eventABI.RawName {
@@ -125,6 +129,13 @@ func (rs *StateStore) processBlock(ctx context.Context, block *eventwatcher.LogB
 			if err != nil {
 				rs.log.Error().Err(err).Msgf("failed process %T event", evt)
 			}
+		case "SeenOpSet":
+			var evt state.StateSeenOpSet
+			if err := unpackLog(rs.abi, &evt, eventABI.RawName, rawEvent); err != nil {
+				rs.log.Warn().Err(err).Msgf("undecodable %T event", evt)
+				continue
+			}
+			seenOps[hexutil.Encode(evt.Sig)] = true
 		case "EdgeTypeRegister":
 			var evt state.StateEdgeTypeRegister
 			if err := unpackLog(rs.abi, &evt, eventABI.RawName, rawEvent); err != nil {
@@ -139,45 +150,28 @@ func (rs *StateStore) processBlock(ctx context.Context, block *eventwatcher.LogB
 		default:
 			rs.log.Warn().Msgf("ignoring unhandled event type %v", eventABI)
 		}
-		graphs = graphs.Set(rawEvent.Address.Hex(), g)
-	}
-	allGraphs := rs.graphs.Set(uint64(block.ToBlock), graphs)
-
-	// only keep last $maxKeep graphs
-	// [!] this can be removed once we persist data to disk, but it isn't
-	//     practical to keep history while using in-memory storage
-	maxKeep := uint64(250)
-	oldestToKeep := uint64(0)
-	if uint64(block.ToBlock) > maxKeep {
-		oldestToKeep = uint64(block.ToBlock) - maxKeep
-	}
-	itr := allGraphs.Iterator()
-	for !itr.Done() {
-		k, _, ok := itr.Next()
-		if !ok {
-			continue
-		}
-		if k == rs.latest {
-			continue
-		}
-		if k == uint64(block.ToBlock) {
-			continue
-		}
-		if k > oldestToKeep {
-			continue
-		}
-		allGraphs = allGraphs.Delete(k)
 	}
 
-	// switch to latest
-	rs.graphs = allGraphs
-	rs.latest = uint64(block.ToBlock)
+	// update
+	rs.pendingOpSets = rs.removePendingOpSets(seenOps)
+	rs.graph = g
+	rs.pendingGraph = rs.rebuildPendingGraph()
 
-	for block, wg := range rs.wg {
-		if rs.latest >= block {
-			wg.Done()
-			delete(rs.wg, block)
-		}
+	// notify
+
+	sigs := []string{}
+	for sig := range seenOps {
+		sigs = append(sigs, sig)
+	}
+	rs.Notify(int(block.ToBlock), sigs, false)
+}
+
+func (rs *StateStore) Notify(blockNumber int, sigs []string, simulated bool) {
+	rs.notifications <- &model.BlockEvent{
+		ID:        fmt.Sprintf("block-%d", blockNumber),
+		Block:     blockNumber,
+		Sigs:      sigs,
+		Simulated: simulated,
 	}
 }
 
@@ -254,21 +248,67 @@ func (rs *StateStore) removeEdge(g *model.Graph, evt *state.StateEdgeRemove) (*m
 	return g, nil
 }
 
-func (rs *StateStore) GetGraph(stateContractAddr common.Address, block int) *model.Graph {
+func (rs *StateStore) GetGraph() *model.Graph {
 	rs.Lock()
 	defer rs.Unlock()
-	b := rs.latest
-	if block != 0 {
-		b = uint64(block)
-	}
+	return rs.graph
+}
 
-	graphs, ok := rs.graphs.Get(b)
-	if !ok {
+func (rs *StateStore) AddPendingOpSet(estimatedBlockNumber int, opset OpSet) {
+	rs.Lock()
+	defer rs.Unlock()
+	rs.pendingOpSets = append(rs.pendingOpSets, opset)
+	rs.pendingGraph = rs.rebuildPendingGraph()
+
+	rs.Notify(estimatedBlockNumber, []string{opset.Sig}, true)
+}
+
+func (rs *StateStore) RemovePendingOpSets(seenOps map[string]bool) []OpSet {
+	rs.Lock()
+	defer rs.Unlock()
+	return rs.removePendingOpSets(seenOps)
+}
+
+func (rs *StateStore) removePendingOpSets(seenOps map[string]bool) []OpSet {
+	newPendingOpSets := []OpSet{}
+	for _, opset := range rs.pendingOpSets {
+		if seenOps[opset.Sig] {
+			continue
+		}
+		newPendingOpSets = append(newPendingOpSets, opset)
+	}
+	return newPendingOpSets
+}
+
+func (rs *StateStore) GetPendingGraph() *model.Graph {
+	return rs.pendingGraph
+}
+
+func (rs *StateStore) rebuildPendingGraph() *model.Graph {
+	g := rs.graph
+	if g == nil {
 		return nil
 	}
-	g, ok := graphs.Get(stateContractAddr.Hex())
-	if !ok {
-		return nil
+	for _, opset := range rs.pendingOpSets {
+		for _, op := range opset.Ops {
+			var err error
+			var g2 *model.Graph
+			switch evt := op.(type) {
+			case *state.StateEdgeSet:
+				g2, err = rs.setEdge(g, evt)
+			case *state.StateEdgeRemove:
+				g2, err = rs.removeEdge(g, evt)
+			case *state.StateAnnotationSet:
+				g2, err = rs.setAnnotation(g, evt)
+			default:
+				err = fmt.Errorf("unexpected evt: %v", evt)
+			}
+			if err != nil {
+				fmt.Printf("ERROR: failed to apply pending op: %v\n", err)
+			} else {
+				g = g2
+			}
+		}
 	}
 	return g
 }

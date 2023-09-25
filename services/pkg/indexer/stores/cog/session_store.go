@@ -74,6 +74,8 @@ func (rs *SessionStore) watch(ctx context.Context, blocks chan *eventwatcher.Log
 					if err != nil {
 						rs.log.Error().Err(err).Msgf("failed process %T event", evt)
 					}
+				case "SeenOpSet":
+					// noop
 				default:
 					rs.log.Warn().Msgf("ignoring unhandled event type %v", eventABI)
 				}

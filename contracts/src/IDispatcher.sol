@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.13;
 
+import {Op} from "./BaseState.sol";
+
 // const SCOPE_READ_SENSITIVE = 0x1;
 // uint32 SCOPE_WRITE_SENSITIVE = 0x2;
 uint32 constant SCOPE_FULL_ACCESS = 0xffff;
@@ -26,10 +28,10 @@ interface Dispatcher {
     // - session is contains data about the action sender
     // session data should be considered untrusted and implementations MUST
     // verify the session data or the sender before executing Rules.
-    function dispatch(bytes calldata action, Context calldata ctx) external;
-    function dispatch(bytes[] calldata actions, Context calldata ctx) external;
+    function dispatch(bytes calldata action, Context calldata ctx) external returns (Op[] memory);
+    function dispatch(bytes[] calldata actions, Context calldata ctx) external returns (Op[] memory);
 
     // same as dispatch above, but ctx is built from msg.sender
-    function dispatch(bytes calldata action) external;
-    function dispatch(bytes[] calldata actions) external;
+    function dispatch(bytes calldata action) external returns (Op[] memory);
+    function dispatch(bytes[] calldata actions) external returns (Op[] memory);
 }

@@ -21,6 +21,7 @@ type ActionTransaction {
 	router: Router!
 	batch: ActionBatch!
 	status: ActionTransactionStatus! # same as batch.status
+	nonce: Int!
 }
 
 type SessionScope {
@@ -38,6 +39,9 @@ type Router {
 	id: ID! # contract address of Router
 	sessions(owner: String): [Session!]! @goField(forceResolver: true)
 	session(id: ID!): Session @goField(forceResolver: true)
-	transactions(owner: String, status: [ActionTransactionStatus!]): [ActionTransaction!]! @goField(forceResolver: true)
+	transactions(
+		owner: String
+		status: [ActionTransactionStatus!]
+	): [ActionTransaction!]! @goField(forceResolver: true)
 	transaction(id: ID!): ActionTransaction @goField(forceResolver: true)
 }
