@@ -5,7 +5,7 @@ import "./IState.sol";
 import "./IDispatcher.sol";
 import "./IRouter.sol";
 import "./IRule.sol";
-import {Op,BaseState} from "./BaseState.sol";
+import {Op, BaseState} from "./BaseState.sol";
 
 // BaseDispatcher implements some basic structure around registering ActionTypes
 // and Rules and executing those rules in the defined order against a given State
@@ -84,7 +84,7 @@ contract BaseDispatcher is Dispatcher {
     }
 
     // dispatch from router trusted context
-    function dispatch(bytes[] calldata actions, Context calldata ctx) public returns (Op[] memory){
+    function dispatch(bytes[] calldata actions, Context calldata ctx) public returns (Op[] memory) {
         uint256 fromHead = state.getHead();
         for (uint256 i = 0; i < actions.length; i++) {
             dispatch(actions[i], ctx);

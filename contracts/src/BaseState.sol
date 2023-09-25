@@ -50,7 +50,7 @@ contract BaseState is State {
         }
         require(to > from, "TO must be after FROM");
         res = new Op[](to - from);
-        for (uint256 i=0; i<res.length; i++) {
+        for (uint256 i = 0; i < res.length; i++) {
             res[i] = ops[from + i];
         }
         return res;

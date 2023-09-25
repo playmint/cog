@@ -8,7 +8,9 @@ import {Op} from "./BaseState.sol";
 // They might be a seperate contract or an extension of the Dispatcher
 // A "bundle" here means; one or more actions all signed by the same session key
 interface Router {
-    function dispatch(bytes[] calldata actionBundles, bytes calldata bundleSignatures, uint256 nonce) external returns (Op[] memory);
+    function dispatch(bytes[] calldata actionBundles, bytes calldata bundleSignatures, uint256 nonce)
+        external
+        returns (Op[] memory);
 
     function authorizeAddr(Dispatcher dispatcher, uint32 ttl, uint32 scopes, address addr) external;
 

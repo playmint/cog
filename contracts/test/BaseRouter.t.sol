@@ -143,7 +143,8 @@ contract BaseRouterTest is Test {
         uint256 nonce = 111; // random pick
         bytes[] memory actions = new bytes[](1);
         actions[0] = abi.encodeCall(TestActions.SET_SENDER, ());
-        bytes32 digest = keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n32", keccak256(abi.encode(actions, nonce))));
+        bytes32 digest =
+            keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n32", keccak256(abi.encode(actions, nonce))));
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(privateKey, digest);
         bytes memory sig = abi.encodePacked(r, s, v);
 

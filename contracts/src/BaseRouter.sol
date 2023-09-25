@@ -129,7 +129,7 @@ contract BaseRouter is Router {
             // this is the path for when a player is using a temporary
             // short lived session key in their client to sign actions
             address signer = ecrecover(
-                keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n32", keccak256(abi.encode(actions,nonce)))),
+                keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n32", keccak256(abi.encode(actions, nonce)))),
                 uint8(bytes1(sig[64:65])),
                 bytes32(sig[0:32]),
                 bytes32(sig[32:64])

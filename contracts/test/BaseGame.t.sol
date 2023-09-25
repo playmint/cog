@@ -98,8 +98,13 @@ contract BaseGameTest is Test {
         assertEq(metadata.url, "http://localhost:3000/");
     }
 
-    function sign(bytes[] memory actions, uint256 nonce, uint256 privateKey) private pure returns (uint8 v, bytes32 r, bytes32 s) {
-        bytes32 digest = keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n32", keccak256(abi.encode(actions, nonce))));
+    function sign(bytes[] memory actions, uint256 nonce, uint256 privateKey)
+        private
+        pure
+        returns (uint8 v, bytes32 r, bytes32 s)
+    {
+        bytes32 digest =
+            keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n32", keccak256(abi.encode(actions, nonce))));
         return vm.sign(privateKey, digest);
     }
 }
