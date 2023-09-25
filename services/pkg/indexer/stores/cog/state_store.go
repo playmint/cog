@@ -273,7 +273,6 @@ func (rs *StateStore) removePendingOpSets(seenOps map[string]bool) []OpSet {
 	newPendingOpSets := []OpSet{}
 	for _, opset := range rs.pendingOpSets {
 		if seenOps[opset.Sig] {
-			fmt.Println("SEEEEEEEEEEEEEEEEEEEEN: ", opset.Sig)
 			continue
 		}
 		newPendingOpSets = append(newPendingOpSets, opset)
@@ -288,10 +287,8 @@ func (rs *StateStore) GetPendingGraph() *model.Graph {
 func (rs *StateStore) rebuildPendingGraph() *model.Graph {
 	g := rs.graph
 	if g == nil {
-		fmt.Println("rebuildPendingGraph failed: no graph to build on")
 		return nil
 	}
-	fmt.Println("GetPendingGraph pendingcount=", len(rs.pendingOpSets))
 	for _, opset := range rs.pendingOpSets {
 		for _, op := range opset.Ops {
 			var err error
