@@ -24,7 +24,6 @@ type Client struct {
 	nonces     map[common.Address]uint64
 	rpc        *rpc.Client
 	*ethclient.Client
-	concurrencyLock chan struct{}
 	sync.Mutex
 }
 
@@ -47,11 +46,10 @@ func NewClient(rpc *rpc.Client, concurrency int, key *ecdsa.PrivateKey) (*Client
 		return nil, fmt.Errorf("concurrency must be at least 1")
 	}
 	c := &Client{
-		privateKey:      key,
-		nonces:          map[common.Address]uint64{},
-		rpc:             rpc,
-		concurrencyLock: make(chan struct{}, concurrency),
-		Client:          ethclient.NewClient(rpc),
+		privateKey: key,
+		nonces:     map[common.Address]uint64{},
+		rpc:        rpc,
+		Client:     ethclient.NewClient(rpc),
 	}
 	if key != nil {
 		c.publicKey = *key.Public().(*ecdsa.PublicKey)
@@ -82,14 +80,6 @@ func (c *Client) PendingNonceAt(ctx context.Context, addr common.Address) (uint6
 
 func (c *Client) IncrementRelayNonce(ctx context.Context) {
 	c.nonces[c.Address()]++
-}
-
-func (c *Client) ConcurrencyLock() {
-	c.concurrencyLock <- struct{}{}
-}
-
-func (c *Client) ConcurrencyUnlock() {
-	<-c.concurrencyLock
 }
 
 func (c *Client) NewRelayTransactor(ctx context.Context) (*bind.TransactOpts, error) {
