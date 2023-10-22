@@ -17,7 +17,6 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/playmint/ds-node/pkg/api/model"
 	"github.com/playmint/ds-node/pkg/client/alchemy"
-	"github.com/playmint/ds-node/pkg/config"
 	"github.com/playmint/ds-node/pkg/contracts/router"
 	"github.com/playmint/ds-node/pkg/contracts/state"
 	"github.com/playmint/ds-node/pkg/indexer"
@@ -64,7 +63,6 @@ type MemorySequencer struct {
 	notifications     chan interface{}
 	idxr              indexer.Indexer
 	log               zerolog.Logger
-	pendingSim        bool
 }
 
 func NewMemorySequencer(
@@ -92,7 +90,6 @@ func NewMemorySequencer(
 	if err != nil {
 		return nil, err
 	}
-	seqr.pendingSim = config.SequencerPendingSim
 
 	return seqr, nil
 }
