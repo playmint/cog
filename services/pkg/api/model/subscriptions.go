@@ -61,6 +61,7 @@ func (subs *Subscriptions) Listen(ctx context.Context) {
 		case notification := <-subs.notifications:
 			switch obj := notification.(type) {
 			case *BlockEvent:
+				subs.Lock()
 				for _, subs := range subs.Events {
 					for _, subscriber := range subs {
 						select {
@@ -69,6 +70,7 @@ func (subs *Subscriptions) Listen(ctx context.Context) {
 						}
 					}
 				}
+				subs.Unlock()
 			case *ActionTransaction:
 				for routerID, subsByOwner := range subs.TxByOwner {
 					if routerID != obj.RouterAddress {
@@ -87,6 +89,7 @@ func (subs *Subscriptions) Listen(ctx context.Context) {
 					}
 				}
 			case *Session:
+				subs.Lock()
 				for routerID, subsByOwner := range subs.SessionByOwner {
 					if routerID != obj.RouterAddress {
 						continue
@@ -103,6 +106,7 @@ func (subs *Subscriptions) Listen(ctx context.Context) {
 						}
 					}
 				}
+				subs.Unlock()
 			default:
 			}
 		}

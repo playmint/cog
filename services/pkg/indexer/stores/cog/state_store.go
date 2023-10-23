@@ -64,9 +64,9 @@ func (rs *StateStore) watch(ctx context.Context, watcher *eventwatcher.Watcher) 
 
 func (rs *StateStore) processBlock(ctx context.Context, block *eventwatcher.LogBatch) {
 	rs.Lock()
-	defer rs.Unlock()
-
 	g := rs.graph
+	rs.Unlock()
+
 	if g == nil {
 		g = model.NewGraph(0)
 	}
@@ -153,9 +153,11 @@ func (rs *StateStore) processBlock(ctx context.Context, block *eventwatcher.LogB
 	}
 
 	// update
-	rs.pendingOpSets = rs.removePendingOpSets(seenOps)
+	rs.Lock()
+	rs.pendingOpSets = rs.removePendingOpSets(rs.pendingOpSets, seenOps)
 	rs.graph = g
 	rs.pendingGraph = rs.rebuildPendingGraph()
+	rs.Unlock()
 
 	// notify
 
@@ -256,22 +258,22 @@ func (rs *StateStore) GetGraph() *model.Graph {
 
 func (rs *StateStore) AddPendingOpSet(estimatedBlockNumber int, opset OpSet) {
 	rs.Lock()
-	defer rs.Unlock()
 	rs.pendingOpSets = append(rs.pendingOpSets, opset)
 	rs.pendingGraph = rs.rebuildPendingGraph()
+	rs.Unlock()
 
 	rs.Notify(estimatedBlockNumber, []string{opset.Sig}, true)
 }
 
-func (rs *StateStore) RemovePendingOpSets(seenOps map[string]bool) []OpSet {
+func (rs *StateStore) RemovePendingOpSets(seenOps map[string]bool) {
 	rs.Lock()
 	defer rs.Unlock()
-	return rs.removePendingOpSets(seenOps)
+	rs.pendingOpSets = rs.removePendingOpSets(rs.pendingOpSets, seenOps)
 }
 
-func (rs *StateStore) removePendingOpSets(seenOps map[string]bool) []OpSet {
+func (rs *StateStore) removePendingOpSets(existingOpSets []OpSet, seenOps map[string]bool) []OpSet {
 	newPendingOpSets := []OpSet{}
-	for _, opset := range rs.pendingOpSets {
+	for _, opset := range existingOpSets {
 		if seenOps[opset.Sig] {
 			continue
 		}

@@ -17,7 +17,6 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/playmint/ds-node/pkg/api/model"
 	"github.com/playmint/ds-node/pkg/client/alchemy"
-	"github.com/playmint/ds-node/pkg/config"
 	"github.com/playmint/ds-node/pkg/contracts/router"
 	"github.com/playmint/ds-node/pkg/contracts/state"
 	"github.com/playmint/ds-node/pkg/indexer"
@@ -64,7 +63,6 @@ type MemorySequencer struct {
 	notifications     chan interface{}
 	idxr              indexer.Indexer
 	log               zerolog.Logger
-	pendingSim        bool
 }
 
 func NewMemorySequencer(
@@ -92,7 +90,6 @@ func NewMemorySequencer(
 	if err != nil {
 		return nil, err
 	}
-	seqr.pendingSim = config.SequencerPendingSim
 
 	return seqr, nil
 }
@@ -166,11 +163,6 @@ func (seqr *MemorySequencer) Enqueue(
 				Str("hash", tx.Hash().Hex()).
 				Uint64("nonce", actionNonce).
 				Msg("action-fail")
-			if optimistic && opset != nil {
-				seqr.idxr.RemovePendingOpSets(map[string]bool{
-					opset.Sig: true,
-				})
-			}
 			return err
 		}
 		seqr.log.Info().
@@ -215,7 +207,17 @@ func (seqr *MemorySequencer) dispatchSim(
 	stateAddr common.Address,
 	action *model.ActionTransaction,
 ) (*cog.OpSet, error) {
-	client := seqr.chainHttpClient
+
+	client, err := alchemy.Dial(
+		seqr.chainProviderHTTP,
+		1,
+		seqr.PrivateKey,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer client.Close()
+
 	// prep action data
 	actions := action.ActionBytes()
 	sig := action.ActionSig()
@@ -297,8 +299,8 @@ func (seqr *MemorySequencer) dispatch(
 	}
 	txOpts.Context = ctx
 	txOpts.Value = big.NewInt(0)
-	txOpts.GasLimit = uint64(20000000)
-	txOpts.GasPrice = big.NewInt(1000000500)
+	// txOpts.GasLimit = uint64(20000000)
+	// txOpts.GasPrice = big.NewInt(1000000500)
 
 	sessionRouter, err := router.NewSessionRouter(routerAddr, client)
 	if err != nil {
@@ -349,8 +351,8 @@ func (seqr *MemorySequencer) Signout(ctx context.Context, routerAddr common.Addr
 	if err != nil {
 		return err
 	}
-	txOpts.Value = big.NewInt(0)      // in wei
-	txOpts.GasLimit = uint64(3000000) // in units
+	txOpts.Value = big.NewInt(0) // in wei
+	// txOpts.GasLimit = uint64(3000000) // in units
 
 	// decode the permit into sig parts
 	sig, err := hexutil.Decode(permit)
@@ -360,7 +362,7 @@ func (seqr *MemorySequencer) Signout(ctx context.Context, routerAddr common.Addr
 
 	_, err = sessionRouter.RevokeAddr(txOpts, sessionKey, sig)
 	if err != nil {
-		return fmt.Errorf("failed perform signin tx for session=%v: %v", sessionKey, err)
+		return fmt.Errorf("failed perform signout tx for session=%v: %v", sessionKey, err)
 	}
 	defer client.IncrementRelayNonce(ctx)
 
@@ -370,25 +372,27 @@ func (seqr *MemorySequencer) Signout(ctx context.Context, routerAddr common.Addr
 func (seqr *MemorySequencer) Signin(ctx context.Context, routerAddr common.Address, dispatcherAddr common.Address, sessionKey common.Address, ttl uint32, scopes uint32, permit string) error {
 	client := seqr.chainHttpClient
 	client.Lock()
-	defer client.Unlock()
 
 	// lookup the account contract
 	sessionRouter, err := router.NewSessionRouter(routerAddr, client)
 	if err != nil {
+		client.Unlock()
 		return err
 	}
 
 	// setup tx
 	txOpts, err := client.NewRelayTransactor(ctx)
 	if err != nil {
+		client.Unlock()
 		return err
 	}
-	txOpts.Value = big.NewInt(0)      // in wei
-	txOpts.GasLimit = uint64(3000000) // in units
+	txOpts.Value = big.NewInt(0) // in wei
+	// txOpts.GasLimit = uint64(3000000) // in units
 
 	// decode the permit into sig parts
 	sig, err := hexutil.Decode(permit)
 	if err != nil {
+		client.Unlock()
 		return err
 	}
 
@@ -402,6 +406,7 @@ func (seqr *MemorySequencer) Signin(ctx context.Context, routerAddr common.Addre
 			Str("router", routerAddr.Hex()).
 			Err(err).
 			Msg("signin-fail")
+		client.Unlock()
 		return fmt.Errorf("failed perform signin tx for session=%v: %v", sessionKey, err)
 	}
 	seqr.log.Info().
@@ -412,6 +417,7 @@ func (seqr *MemorySequencer) Signin(ctx context.Context, routerAddr common.Addre
 		Str("router", routerAddr.Hex()).
 		Msg("signin-ok")
 	client.IncrementRelayNonce(ctx)
+	client.Unlock()
 
 	// wait mined
 	maxWait, cancel := context.WithTimeout(ctx, 1*time.Minute)
