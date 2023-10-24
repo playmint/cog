@@ -65,7 +65,6 @@ func (rs *StateStore) watch(ctx context.Context, watcher *eventwatcher.Watcher) 
 func (rs *StateStore) processBlock(ctx context.Context, block *eventwatcher.LogBatch) {
 	rs.Lock()
 	g := rs.graph
-	rs.Unlock()
 
 	if g == nil {
 		g = model.NewGraph(0)
@@ -153,7 +152,6 @@ func (rs *StateStore) processBlock(ctx context.Context, block *eventwatcher.LogB
 	}
 
 	// update
-	rs.Lock()
 	rs.pendingOpSets = rs.removePendingOpSets(rs.pendingOpSets, seenOps)
 	rs.graph = g
 	rs.pendingGraph = rs.rebuildPendingGraph()
