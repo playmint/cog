@@ -16,8 +16,9 @@ import (
 )
 
 type OpSet struct {
-	Sig string
-	Ops []interface{}
+	Expires int64
+	Sig     string
+	Ops     []interface{}
 }
 
 type StateStore struct {
@@ -152,7 +153,7 @@ func (rs *StateStore) processBlock(ctx context.Context, block *eventwatcher.LogB
 	}
 
 	// update
-	rs.pendingOpSets = rs.removePendingOpSets(rs.pendingOpSets, seenOps)
+	rs.pendingOpSets = rs.removePendingOpSets(rs.pendingOpSets, seenOps, block.ToBlock)
 	rs.graph = g
 	rs.pendingGraph = rs.rebuildPendingGraph()
 	rs.Unlock()
@@ -255,6 +256,12 @@ func (rs *StateStore) GetGraph() *model.Graph {
 }
 
 func (rs *StateStore) AddPendingOpSet(estimatedBlockNumber int, opset OpSet) {
+	// default expiry to ~30 blocks in future this means we will stop waiting
+	// for the pending sig to arrive if we don't hear anything within about 1m
+	if opset.Expires == 0 {
+		opset.Expires = int64(estimatedBlockNumber + 30)
+	}
+
 	rs.Lock()
 	rs.pendingOpSets = append(rs.pendingOpSets, opset)
 	rs.pendingGraph = rs.rebuildPendingGraph()
@@ -266,13 +273,16 @@ func (rs *StateStore) AddPendingOpSet(estimatedBlockNumber int, opset OpSet) {
 func (rs *StateStore) RemovePendingOpSets(seenOps map[string]bool) {
 	rs.Lock()
 	defer rs.Unlock()
-	rs.pendingOpSets = rs.removePendingOpSets(rs.pendingOpSets, seenOps)
+	rs.pendingOpSets = rs.removePendingOpSets(rs.pendingOpSets, seenOps, -1)
 }
 
-func (rs *StateStore) removePendingOpSets(existingOpSets []OpSet, seenOps map[string]bool) []OpSet {
+func (rs *StateStore) removePendingOpSets(existingOpSets []OpSet, seenOps map[string]bool, currentBlock int64) []OpSet {
 	newPendingOpSets := []OpSet{}
 	for _, opset := range existingOpSets {
 		if seenOps[opset.Sig] {
+			continue
+		}
+		if currentBlock > 0 && opset.Expires > 0 && currentBlock > opset.Expires {
 			continue
 		}
 		newPendingOpSets = append(newPendingOpSets, opset)
