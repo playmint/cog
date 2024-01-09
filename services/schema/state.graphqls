@@ -120,6 +120,12 @@ type Node {
 	annotation(name: String!): Annotation
 
 	"""
+	allData is the store of on-chain 32byte key value pairs belonging to the node
+	"""
+	allData: [NodeData]!
+	data(name: String!): NodeData
+
+	"""
 	nodes have a "kind" label, it is the human friendly decoding of the first 4
 	bytes of the id. See `id` and `keys`. This value is discovered based on the
 	value set on the state contract via registerNodeType.
@@ -277,6 +283,15 @@ usually cost-effective for an equivilent value stored in state.
 type Annotation {
 	id: ID!
 	ref: String!
+	name: String!
+	value: String!
+}
+
+"""
+node data is an on-chain 32byte value stored as a key value pair for a given node
+"""
+type NodeData {
+	id: ID!
 	name: String!
 	value: String!
 }

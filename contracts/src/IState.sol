@@ -141,6 +141,7 @@ interface State {
     event EdgeSet(bytes4 relID, uint8 relKey, bytes24 srcNodeID, bytes24 dstNodeID, uint160 weight);
     event EdgeRemove(bytes4 relID, uint8 relKey, bytes24 srcNodeID);
     event AnnotationSet(bytes24 id, AnnotationKind kind, string label, bytes32 ref, string data);
+    event DataSet(bytes24 id, string label, bytes32 data);
 
     // FIXME: lazy, this is totally the wrong place for this, but it makes indexing easier
     event SeenOpSet(bytes sig);
@@ -162,4 +163,7 @@ interface State {
     // indexers/clients are expected to watch for AnnotationSet event and store
     // the annotationData for later lookup
     function annotate(bytes24 nodeID, string memory label, string memory annotationData) external;
+
+    function setData(bytes24 nodeID, string memory label, bytes32 data) external;
+    function getData(bytes24 nodeID, string memory annotationLabel) external view returns (bytes32);
 }
