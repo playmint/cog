@@ -26,9 +26,12 @@ enum CompoundKeyKind {
     ADDRESS, // key is 20 byte address
     BYTES, // key is an 20 byte blob of data
     STRING // key is an 20 byte string
+
 }
 
-enum AnnotationKind {CALLDATA}
+enum AnnotationKind {
+    CALLDATA
+}
 
 library CompoundKeyEncoder {
     function UINT64(bytes4 kindID, uint64 key) internal pure returns (bytes24) {
