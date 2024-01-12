@@ -273,6 +273,13 @@ func (seqr *MemorySequencer) dispatchSim(
 				Data:  op.AnnData,
 				Raw:   types.Log{BlockNumber: fakeBlockNumber}, // Blockchain specific contextual infos
 			})
+		case 3: // data set
+			opset.Ops = append(opset.Ops, &state.StateDataSet{
+				Id:    op.SrcNodeID,
+				Label: op.AnnName,
+				Data:  op.NodeData,
+				Raw:   types.Log{BlockNumber: fakeBlockNumber}, // Blockchain specific contextual infos
+			})
 		}
 	}
 	seqr.idxr.AddPendingOpSet(int(fakeBlockNumber), opset)

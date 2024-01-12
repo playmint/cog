@@ -41,6 +41,8 @@ type Graph struct {
 	labels *immutable.Map[string, *immutable.Map[string, string]]
 	// annotationRef => data
 	ann *immutable.Map[string, string]
+	// nodeID => label => data TODO: Change string to [32]byte?
+	nodeData *immutable.Map[string, *immutable.Map[string, string]]
 	// block is the last seen update to the graph
 	block uint64
 	// cache of edges by node id
@@ -55,6 +57,7 @@ func NewGraph(block uint64) *Graph {
 		kinds:     immutable.NewMap[string, *state.StateNodeTypeRegister](nil),
 		labels:    immutable.NewMap[string, *immutable.Map[string, string]](nil),
 		ann:       immutable.NewMap[string, string](nil),
+		nodeData:  immutable.NewMap[string, *immutable.Map[string, string]](nil),
 		block:     block,
 		edgeCache: map[string][]*Edge{},
 	}
@@ -93,6 +96,7 @@ func (g *Graph) SetRelData(relData *state.StateEdgeTypeRegister) *Graph {
 		kinds:     g.kinds,
 		labels:    g.labels,
 		ann:       g.ann,
+		nodeData:  g.nodeData,
 		block:     g.block,
 		edgeCache: g.edgeCache,
 	}
@@ -106,6 +110,7 @@ func (g *Graph) SetKindData(kindData *state.StateNodeTypeRegister) *Graph {
 		kinds:     g.kinds.Set(hexutil.Encode(kindData.Id[:]), kindData),
 		labels:    g.labels,
 		ann:       g.ann,
+		nodeData:  g.nodeData,
 		block:     g.block,
 		edgeCache: g.edgeCache,
 	}
@@ -133,6 +138,37 @@ func (g *Graph) SetAnnotationData(nodeID string, label string, ref string, data 
 		kinds:     g.kinds,
 		labels:    g.labels.Set(nodeID, labels),
 		ann:       ann,
+		nodeData:  g.nodeData,
+		block:     block,
+		edgeCache: map[string][]*Edge{},
+	}
+
+	newGraph.updateEdgeCache()
+
+	return newGraph
+}
+
+func (g *Graph) SetData(nodeID string, key string, value string, block uint64) *Graph {
+	// update the label data
+	nodeData, ok := g.nodeData.Get(nodeID)
+	if !ok {
+		nodeData = immutable.NewMap[string, string](nil)
+	}
+	nodeData = nodeData.Set(key, value)
+
+	// update the node data to mark the seen nodes
+	nodes := g.nodes
+	nodes = nodes.Set(nodeID, true)
+
+	// build our new graph
+	newGraph := &Graph{
+		nodes:     nodes,
+		edges:     g.edges,
+		rels:      g.rels,
+		kinds:     g.kinds,
+		labels:    g.labels,
+		ann:       g.ann,
+		nodeData:  g.nodeData.Set(nodeID, nodeData),
 		block:     block,
 		edgeCache: map[string][]*Edge{},
 	}
@@ -168,6 +204,7 @@ func (g *Graph) SetEdge(relID string, relKey uint8, srcNodeID string, dstNodeID 
 		kinds:     g.kinds,
 		labels:    g.labels,
 		ann:       g.ann,
+		nodeData:  g.nodeData,
 		block:     block,
 		edgeCache: map[string][]*Edge{},
 	}
@@ -197,6 +234,7 @@ func (g *Graph) RemoveEdge(relID string, relKey uint8, srcNodeID string, block u
 		kinds:     g.kinds,
 		labels:    g.labels,
 		ann:       g.ann,
+		nodeData:  g.nodeData,
 		block:     block,
 		edgeCache: map[string][]*Edge{},
 	}
@@ -362,6 +400,37 @@ func (n *Node) Annotations() []*Annotation {
 
 	}
 	return annotations
+}
+
+func (n *Node) Data(name string) *NodeData {
+	for _, nodeData := range n.AllData() {
+		if nodeData.Name == name {
+			return nodeData
+		}
+	}
+	return nil
+}
+
+func (n *Node) AllData() []*NodeData {
+	allData := []*NodeData{}
+	dataMap, ok := n.g.nodeData.Get(n.ID)
+	if !ok {
+		return allData
+	}
+	itr := dataMap.Iterator()
+	for !itr.Done() {
+		key, value, ok := itr.Next()
+		if !ok {
+			continue
+		}
+		allData = append(allData, &NodeData{
+			ID:    fmt.Sprintf("%s-%s", n.ID, key),
+			Name:  key,
+			Value: value,
+		})
+
+	}
+	return allData
 }
 
 func (n *Node) Kind() string {

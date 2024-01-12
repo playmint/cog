@@ -91,6 +91,13 @@ type Match struct {
 	MaxDepth *int `json:"maxDepth"`
 }
 
+// node data is an on-chain 32byte value stored as a key value pair for a given node
+type NodeData struct {
+	ID    string `json:"id"`
+	Name  string `json:"name"`
+	Value string `json:"value"`
+}
+
 // RelMatch configures the types of edges that can be matched.
 //
 // rel is the human friendly name of the relationship.

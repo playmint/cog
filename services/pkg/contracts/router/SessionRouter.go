@@ -26,7 +26,6 @@ var (
 	_ = common.Big1
 	_ = types.BloomLookup
 	_ = event.NewSubscription
-	_ = abi.ConvertType
 )
 
 // Op is an auto generated low-level Go binding around an user-defined struct.
@@ -39,11 +38,12 @@ type Op struct {
 	Weight    *big.Int
 	AnnName   string
 	AnnData   string
+	NodeData  [32]byte
 }
 
 // SessionRouterMetaData contains all meta data concerning the SessionRouter contract.
 var SessionRouterMetaData = &bind.MetaData{
-	ABI: "[{\"anonymous\":false,\"inputs\":[{\"indexed\":false,\"internalType\":\"bytes\",\"name\":\"sig\",\"type\":\"bytes\"}],\"name\":\"SeenOpSet\",\"type\":\"event\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":false,\"internalType\":\"address\",\"name\":\"session\",\"type\":\"address\"},{\"indexed\":false,\"internalType\":\"address\",\"name\":\"owner\",\"type\":\"address\"},{\"indexed\":false,\"internalType\":\"uint32\",\"name\":\"exp\",\"type\":\"uint32\"},{\"indexed\":false,\"internalType\":\"uint32\",\"name\":\"scopes\",\"type\":\"uint32\"}],\"name\":\"SessionCreate\",\"type\":\"event\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":false,\"internalType\":\"address\",\"name\":\"session\",\"type\":\"address\"}],\"name\":\"SessionDestroy\",\"type\":\"event\"},{\"inputs\":[{\"internalType\":\"contractDispatcher\",\"name\":\"dispatcher\",\"type\":\"address\"},{\"internalType\":\"uint32\",\"name\":\"ttl\",\"type\":\"uint32\"},{\"internalType\":\"uint32\",\"name\":\"scopes\",\"type\":\"uint32\"},{\"internalType\":\"address\",\"name\":\"sessionAddr\",\"type\":\"address\"}],\"name\":\"authorizeAddr\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"contractDispatcher\",\"name\":\"dispatcher\",\"type\":\"address\"},{\"internalType\":\"uint32\",\"name\":\"ttl\",\"type\":\"uint32\"},{\"internalType\":\"uint32\",\"name\":\"scopes\",\"type\":\"uint32\"},{\"internalType\":\"address\",\"name\":\"sessionAddr\",\"type\":\"address\"},{\"internalType\":\"bytes\",\"name\":\"sig\",\"type\":\"bytes\"}],\"name\":\"authorizeAddr\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"bytes[]\",\"name\":\"actions\",\"type\":\"bytes[]\"},{\"internalType\":\"bytes\",\"name\":\"sig\",\"type\":\"bytes\"},{\"internalType\":\"uint256\",\"name\":\"nonce\",\"type\":\"uint256\"}],\"name\":\"dispatch\",\"outputs\":[{\"components\":[{\"internalType\":\"enumOpKind\",\"name\":\"kind\",\"type\":\"uint8\"},{\"internalType\":\"bytes4\",\"name\":\"relID\",\"type\":\"bytes4\"},{\"internalType\":\"uint8\",\"name\":\"relKey\",\"type\":\"uint8\"},{\"internalType\":\"bytes24\",\"name\":\"srcNodeID\",\"type\":\"bytes24\"},{\"internalType\":\"bytes24\",\"name\":\"dstNodeID\",\"type\":\"bytes24\"},{\"internalType\":\"uint160\",\"name\":\"weight\",\"type\":\"uint160\"},{\"internalType\":\"string\",\"name\":\"annName\",\"type\":\"string\"},{\"internalType\":\"string\",\"name\":\"annData\",\"type\":\"string\"}],\"internalType\":\"structOp[]\",\"name\":\"\",\"type\":\"tuple[]\"}],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"addr\",\"type\":\"address\"},{\"internalType\":\"bytes\",\"name\":\"sig\",\"type\":\"bytes\"}],\"name\":\"revokeAddr\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"addr\",\"type\":\"address\"}],\"name\":\"revokeAddr\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"\",\"type\":\"address\"}],\"name\":\"sessions\",\"outputs\":[{\"internalType\":\"contractDispatcher\",\"name\":\"dispatcher\",\"type\":\"address\"},{\"internalType\":\"address\",\"name\":\"owner\",\"type\":\"address\"},{\"internalType\":\"uint32\",\"name\":\"exp\",\"type\":\"uint32\"},{\"internalType\":\"uint32\",\"name\":\"scopes\",\"type\":\"uint32\"}],\"stateMutability\":\"view\",\"type\":\"function\"}]",
+	ABI: "[{\"anonymous\":false,\"inputs\":[{\"indexed\":false,\"internalType\":\"bytes\",\"name\":\"sig\",\"type\":\"bytes\"}],\"name\":\"SeenOpSet\",\"type\":\"event\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":false,\"internalType\":\"address\",\"name\":\"session\",\"type\":\"address\"},{\"indexed\":false,\"internalType\":\"address\",\"name\":\"owner\",\"type\":\"address\"},{\"indexed\":false,\"internalType\":\"uint32\",\"name\":\"exp\",\"type\":\"uint32\"},{\"indexed\":false,\"internalType\":\"uint32\",\"name\":\"scopes\",\"type\":\"uint32\"}],\"name\":\"SessionCreate\",\"type\":\"event\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":false,\"internalType\":\"address\",\"name\":\"session\",\"type\":\"address\"}],\"name\":\"SessionDestroy\",\"type\":\"event\"},{\"inputs\":[{\"internalType\":\"contractDispatcher\",\"name\":\"dispatcher\",\"type\":\"address\"},{\"internalType\":\"uint32\",\"name\":\"ttl\",\"type\":\"uint32\"},{\"internalType\":\"uint32\",\"name\":\"scopes\",\"type\":\"uint32\"},{\"internalType\":\"address\",\"name\":\"sessionAddr\",\"type\":\"address\"}],\"name\":\"authorizeAddr\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"contractDispatcher\",\"name\":\"dispatcher\",\"type\":\"address\"},{\"internalType\":\"uint32\",\"name\":\"ttl\",\"type\":\"uint32\"},{\"internalType\":\"uint32\",\"name\":\"scopes\",\"type\":\"uint32\"},{\"internalType\":\"address\",\"name\":\"sessionAddr\",\"type\":\"address\"},{\"internalType\":\"bytes\",\"name\":\"sig\",\"type\":\"bytes\"}],\"name\":\"authorizeAddr\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"bytes[]\",\"name\":\"actions\",\"type\":\"bytes[]\"},{\"internalType\":\"bytes\",\"name\":\"sig\",\"type\":\"bytes\"},{\"internalType\":\"uint256\",\"name\":\"nonce\",\"type\":\"uint256\"}],\"name\":\"dispatch\",\"outputs\":[{\"components\":[{\"internalType\":\"enumOpKind\",\"name\":\"kind\",\"type\":\"uint8\"},{\"internalType\":\"bytes4\",\"name\":\"relID\",\"type\":\"bytes4\"},{\"internalType\":\"uint8\",\"name\":\"relKey\",\"type\":\"uint8\"},{\"internalType\":\"bytes24\",\"name\":\"srcNodeID\",\"type\":\"bytes24\"},{\"internalType\":\"bytes24\",\"name\":\"dstNodeID\",\"type\":\"bytes24\"},{\"internalType\":\"uint160\",\"name\":\"weight\",\"type\":\"uint160\"},{\"internalType\":\"string\",\"name\":\"annName\",\"type\":\"string\"},{\"internalType\":\"string\",\"name\":\"annData\",\"type\":\"string\"},{\"internalType\":\"bytes32\",\"name\":\"nodeData\",\"type\":\"bytes32\"}],\"internalType\":\"structOp[]\",\"name\":\"\",\"type\":\"tuple[]\"}],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"addr\",\"type\":\"address\"},{\"internalType\":\"bytes\",\"name\":\"sig\",\"type\":\"bytes\"}],\"name\":\"revokeAddr\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"addr\",\"type\":\"address\"}],\"name\":\"revokeAddr\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"\",\"type\":\"address\"}],\"name\":\"sessions\",\"outputs\":[{\"internalType\":\"contractDispatcher\",\"name\":\"dispatcher\",\"type\":\"address\"},{\"internalType\":\"address\",\"name\":\"owner\",\"type\":\"address\"},{\"internalType\":\"uint32\",\"name\":\"exp\",\"type\":\"uint32\"},{\"internalType\":\"uint32\",\"name\":\"scopes\",\"type\":\"uint32\"}],\"stateMutability\":\"view\",\"type\":\"function\"}]",
 }
 
 // SessionRouterABI is the input ABI used to generate the binding from.
@@ -147,11 +147,11 @@ func NewSessionRouterFilterer(address common.Address, filterer bind.ContractFilt
 
 // bindSessionRouter binds a generic wrapper to an already deployed contract.
 func bindSessionRouter(address common.Address, caller bind.ContractCaller, transactor bind.ContractTransactor, filterer bind.ContractFilterer) (*bind.BoundContract, error) {
-	parsed, err := SessionRouterMetaData.GetAbi()
+	parsed, err := abi.JSON(strings.NewReader(SessionRouterABI))
 	if err != nil {
 		return nil, err
 	}
-	return bind.NewBoundContract(address, *parsed, caller, transactor, filterer), nil
+	return bind.NewBoundContract(address, parsed, caller, transactor, filterer), nil
 }
 
 // Call invokes the (constant) contract method with params as input values and
@@ -291,21 +291,21 @@ func (_SessionRouter *SessionRouterTransactorSession) AuthorizeAddr0(dispatcher 
 
 // Dispatch is a paid mutator transaction binding the contract method 0x6fdc0e10.
 //
-// Solidity: function dispatch(bytes[] actions, bytes sig, uint256 nonce) returns((uint8,bytes4,uint8,bytes24,bytes24,uint160,string,string)[])
+// Solidity: function dispatch(bytes[] actions, bytes sig, uint256 nonce) returns((uint8,bytes4,uint8,bytes24,bytes24,uint160,string,string,bytes32)[])
 func (_SessionRouter *SessionRouterTransactor) Dispatch(opts *bind.TransactOpts, actions [][]byte, sig []byte, nonce *big.Int) (*types.Transaction, error) {
 	return _SessionRouter.contract.Transact(opts, "dispatch", actions, sig, nonce)
 }
 
 // Dispatch is a paid mutator transaction binding the contract method 0x6fdc0e10.
 //
-// Solidity: function dispatch(bytes[] actions, bytes sig, uint256 nonce) returns((uint8,bytes4,uint8,bytes24,bytes24,uint160,string,string)[])
+// Solidity: function dispatch(bytes[] actions, bytes sig, uint256 nonce) returns((uint8,bytes4,uint8,bytes24,bytes24,uint160,string,string,bytes32)[])
 func (_SessionRouter *SessionRouterSession) Dispatch(actions [][]byte, sig []byte, nonce *big.Int) (*types.Transaction, error) {
 	return _SessionRouter.Contract.Dispatch(&_SessionRouter.TransactOpts, actions, sig, nonce)
 }
 
 // Dispatch is a paid mutator transaction binding the contract method 0x6fdc0e10.
 //
-// Solidity: function dispatch(bytes[] actions, bytes sig, uint256 nonce) returns((uint8,bytes4,uint8,bytes24,bytes24,uint160,string,string)[])
+// Solidity: function dispatch(bytes[] actions, bytes sig, uint256 nonce) returns((uint8,bytes4,uint8,bytes24,bytes24,uint160,string,string,bytes32)[])
 func (_SessionRouter *SessionRouterTransactorSession) Dispatch(actions [][]byte, sig []byte, nonce *big.Int) (*types.Transaction, error) {
 	return _SessionRouter.Contract.Dispatch(&_SessionRouter.TransactOpts, actions, sig, nonce)
 }

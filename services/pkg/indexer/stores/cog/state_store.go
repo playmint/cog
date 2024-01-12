@@ -53,6 +53,7 @@ func (rs *StateStore) watch(ctx context.Context, watcher *eventwatcher.Watcher) 
 		rs.abi.Events["NodeTypeRegister"].ID,
 		rs.abi.Events["EdgeTypeRegister"].ID,
 		rs.abi.Events["AnnotationSet"].ID,
+		rs.abi.Events["DataSet"].ID,
 		rs.abi.Events["SeenOpSet"].ID,
 	}}
 	topics, err := abi.MakeTopics(query...)
@@ -93,6 +94,17 @@ func (rs *StateStore) processBlock(ctx context.Context, block *eventwatcher.LogB
 			}
 			evt.Raw = rawEvent
 			g, err = rs.setAnnotation(g, &evt)
+			if err != nil {
+				rs.log.Error().Err(err).Msgf("failed process %T event", evt)
+			}
+		case "DataSet":
+			var evt state.StateDataSet
+			if err := unpackLog(rs.abi, &evt, eventABI.RawName, rawEvent); err != nil {
+				rs.log.Warn().Err(err).Msgf("undecodable %T event", evt)
+				continue
+			}
+			evt.Raw = rawEvent
+			g, err = rs.setData(g, &evt)
 			if err != nil {
 				rs.log.Error().Err(err).Msgf("failed process %T event", evt)
 			}
@@ -213,6 +225,21 @@ func (rs *StateStore) setAnnotation(g *model.Graph, evt *state.StateAnnotationSe
 	return g, nil
 }
 
+func (rs *StateStore) setData(g *model.Graph, evt *state.StateDataSet) (*model.Graph, error) {
+	nodeID := hexutil.Encode(evt.Id[:])
+	value := hexutil.Encode(evt.Data[:])
+
+	// update graph
+	g = g.SetData(
+		nodeID,
+		evt.Label,
+		value,
+		evt.Raw.BlockNumber,
+	)
+
+	return g, nil
+}
+
 func (rs *StateStore) setEdge(g *model.Graph, evt *state.StateEdgeSet) (*model.Graph, error) {
 	relID := hexutil.Encode(evt.RelID[:])
 	relKey := evt.RelKey
@@ -310,6 +337,8 @@ func (rs *StateStore) rebuildPendingGraph() *model.Graph {
 				g2, err = rs.removeEdge(g, evt)
 			case *state.StateAnnotationSet:
 				g2, err = rs.setAnnotation(g, evt)
+			case *state.StateDataSet:
+				g2, err = rs.setData(g, evt)
 			default:
 				err = fmt.Errorf("unexpected evt: %v", evt)
 			}

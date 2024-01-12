@@ -8,7 +8,8 @@ error StateUnauthorizedSender();
 enum OpKind {
     EdgeSet,
     EdgeRemove,
-    AnnotationSet
+    AnnotationSet,
+    DataSet
 }
 
 struct Op {
@@ -20,6 +21,7 @@ struct Op {
     uint160 weight;
     string annName;
     string annData;
+    bytes32 nodeData;
 }
 
 contract BaseState is State {
@@ -30,6 +32,7 @@ contract BaseState is State {
 
     mapping(bytes24 => mapping(bytes4 => mapping(uint8 => EdgeData))) edges;
     mapping(bytes24 => mapping(bytes32 => bytes32)) annotations;
+    mapping(bytes24 => mapping(bytes32 => bytes32)) nodeData;
     mapping(address => bool) allowlist;
 
     Op[] ops;
@@ -111,6 +114,21 @@ contract BaseState is State {
 
     function getAnnotationRef(bytes24 nodeID, string memory annotationLabel) external view returns (bytes32) {
         return annotations[nodeID][keccak256(bytes(annotationLabel))];
+    }
+
+    function setData(bytes24 nodeID, string memory label, bytes32 data) external {
+        nodeData[nodeID][keccak256(bytes(label))] = data;
+        emit State.DataSet(nodeID, label, data);
+
+        Op storage op = ops.push();
+        op.kind = OpKind.DataSet;
+        op.srcNodeID = nodeID;
+        op.annName = label;
+        op.nodeData = data;
+    }
+
+    function getData(bytes24 nodeID, string memory annotationLabel) external view returns (bytes32) {
+        return nodeData[nodeID][keccak256(bytes(annotationLabel))];
     }
 
     // TODO: allowlist only

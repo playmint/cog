@@ -26,12 +26,11 @@ var (
 	_ = common.Big1
 	_ = types.BloomLookup
 	_ = event.NewSubscription
-	_ = abi.ConvertType
 )
 
 // StateMetaData contains all meta data concerning the State contract.
 var StateMetaData = &bind.MetaData{
-	ABI: "[{\"anonymous\":false,\"inputs\":[{\"indexed\":false,\"internalType\":\"bytes24\",\"name\":\"id\",\"type\":\"bytes24\"},{\"indexed\":false,\"internalType\":\"enumAnnotationKind\",\"name\":\"kind\",\"type\":\"uint8\"},{\"indexed\":false,\"internalType\":\"string\",\"name\":\"label\",\"type\":\"string\"},{\"indexed\":false,\"internalType\":\"bytes32\",\"name\":\"ref\",\"type\":\"bytes32\"},{\"indexed\":false,\"internalType\":\"string\",\"name\":\"data\",\"type\":\"string\"}],\"name\":\"AnnotationSet\",\"type\":\"event\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":false,\"internalType\":\"bytes4\",\"name\":\"relID\",\"type\":\"bytes4\"},{\"indexed\":false,\"internalType\":\"uint8\",\"name\":\"relKey\",\"type\":\"uint8\"},{\"indexed\":false,\"internalType\":\"bytes24\",\"name\":\"srcNodeID\",\"type\":\"bytes24\"}],\"name\":\"EdgeRemove\",\"type\":\"event\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":false,\"internalType\":\"bytes4\",\"name\":\"relID\",\"type\":\"bytes4\"},{\"indexed\":false,\"internalType\":\"uint8\",\"name\":\"relKey\",\"type\":\"uint8\"},{\"indexed\":false,\"internalType\":\"bytes24\",\"name\":\"srcNodeID\",\"type\":\"bytes24\"},{\"indexed\":false,\"internalType\":\"bytes24\",\"name\":\"dstNodeID\",\"type\":\"bytes24\"},{\"indexed\":false,\"internalType\":\"uint160\",\"name\":\"weight\",\"type\":\"uint160\"}],\"name\":\"EdgeSet\",\"type\":\"event\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":false,\"internalType\":\"bytes4\",\"name\":\"id\",\"type\":\"bytes4\"},{\"indexed\":false,\"internalType\":\"string\",\"name\":\"name\",\"type\":\"string\"},{\"indexed\":false,\"internalType\":\"enumWeightKind\",\"name\":\"kind\",\"type\":\"uint8\"}],\"name\":\"EdgeTypeRegister\",\"type\":\"event\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":false,\"internalType\":\"bytes4\",\"name\":\"id\",\"type\":\"bytes4\"},{\"indexed\":false,\"internalType\":\"string\",\"name\":\"name\",\"type\":\"string\"},{\"indexed\":false,\"internalType\":\"enumCompoundKeyKind\",\"name\":\"keyKind\",\"type\":\"uint8\"}],\"name\":\"NodeTypeRegister\",\"type\":\"event\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":false,\"internalType\":\"bytes\",\"name\":\"sig\",\"type\":\"bytes\"}],\"name\":\"SeenOpSet\",\"type\":\"event\"},{\"inputs\":[{\"internalType\":\"bytes24\",\"name\":\"nodeID\",\"type\":\"bytes24\"},{\"internalType\":\"string\",\"name\":\"label\",\"type\":\"string\"},{\"internalType\":\"string\",\"name\":\"annotationData\",\"type\":\"string\"}],\"name\":\"annotate\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"addr\",\"type\":\"address\"}],\"name\":\"authorizeContract\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"bytes4\",\"name\":\"relID\",\"type\":\"bytes4\"},{\"internalType\":\"uint8\",\"name\":\"relKey\",\"type\":\"uint8\"},{\"internalType\":\"bytes24\",\"name\":\"srcNodeID\",\"type\":\"bytes24\"}],\"name\":\"get\",\"outputs\":[{\"internalType\":\"bytes24\",\"name\":\"dstNodeId\",\"type\":\"bytes24\"},{\"internalType\":\"uint64\",\"name\":\"weight\",\"type\":\"uint64\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"bytes4\",\"name\":\"relID\",\"type\":\"bytes4\"},{\"internalType\":\"string\",\"name\":\"relName\",\"type\":\"string\"},{\"internalType\":\"enumWeightKind\",\"name\":\"weightKind\",\"type\":\"uint8\"}],\"name\":\"registerEdgeType\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"bytes4\",\"name\":\"kindID\",\"type\":\"bytes4\"},{\"internalType\":\"string\",\"name\":\"kindName\",\"type\":\"string\"},{\"internalType\":\"enumCompoundKeyKind\",\"name\":\"keyKind\",\"type\":\"uint8\"}],\"name\":\"registerNodeType\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"bytes4\",\"name\":\"relID\",\"type\":\"bytes4\"},{\"internalType\":\"uint8\",\"name\":\"relKey\",\"type\":\"uint8\"},{\"internalType\":\"bytes24\",\"name\":\"srcNodeID\",\"type\":\"bytes24\"}],\"name\":\"remove\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"bytes4\",\"name\":\"relID\",\"type\":\"bytes4\"},{\"internalType\":\"uint8\",\"name\":\"relKey\",\"type\":\"uint8\"},{\"internalType\":\"bytes24\",\"name\":\"srcNodeID\",\"type\":\"bytes24\"},{\"internalType\":\"bytes24\",\"name\":\"dstNodeID\",\"type\":\"bytes24\"},{\"internalType\":\"uint64\",\"name\":\"weight\",\"type\":\"uint64\"}],\"name\":\"set\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"}]",
+	ABI: "[{\"anonymous\":false,\"inputs\":[{\"indexed\":false,\"internalType\":\"bytes24\",\"name\":\"id\",\"type\":\"bytes24\"},{\"indexed\":false,\"internalType\":\"enumAnnotationKind\",\"name\":\"kind\",\"type\":\"uint8\"},{\"indexed\":false,\"internalType\":\"string\",\"name\":\"label\",\"type\":\"string\"},{\"indexed\":false,\"internalType\":\"bytes32\",\"name\":\"ref\",\"type\":\"bytes32\"},{\"indexed\":false,\"internalType\":\"string\",\"name\":\"data\",\"type\":\"string\"}],\"name\":\"AnnotationSet\",\"type\":\"event\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":false,\"internalType\":\"bytes24\",\"name\":\"id\",\"type\":\"bytes24\"},{\"indexed\":false,\"internalType\":\"string\",\"name\":\"label\",\"type\":\"string\"},{\"indexed\":false,\"internalType\":\"bytes32\",\"name\":\"data\",\"type\":\"bytes32\"}],\"name\":\"DataSet\",\"type\":\"event\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":false,\"internalType\":\"bytes4\",\"name\":\"relID\",\"type\":\"bytes4\"},{\"indexed\":false,\"internalType\":\"uint8\",\"name\":\"relKey\",\"type\":\"uint8\"},{\"indexed\":false,\"internalType\":\"bytes24\",\"name\":\"srcNodeID\",\"type\":\"bytes24\"}],\"name\":\"EdgeRemove\",\"type\":\"event\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":false,\"internalType\":\"bytes4\",\"name\":\"relID\",\"type\":\"bytes4\"},{\"indexed\":false,\"internalType\":\"uint8\",\"name\":\"relKey\",\"type\":\"uint8\"},{\"indexed\":false,\"internalType\":\"bytes24\",\"name\":\"srcNodeID\",\"type\":\"bytes24\"},{\"indexed\":false,\"internalType\":\"bytes24\",\"name\":\"dstNodeID\",\"type\":\"bytes24\"},{\"indexed\":false,\"internalType\":\"uint160\",\"name\":\"weight\",\"type\":\"uint160\"}],\"name\":\"EdgeSet\",\"type\":\"event\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":false,\"internalType\":\"bytes4\",\"name\":\"id\",\"type\":\"bytes4\"},{\"indexed\":false,\"internalType\":\"string\",\"name\":\"name\",\"type\":\"string\"},{\"indexed\":false,\"internalType\":\"enumWeightKind\",\"name\":\"kind\",\"type\":\"uint8\"}],\"name\":\"EdgeTypeRegister\",\"type\":\"event\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":false,\"internalType\":\"bytes4\",\"name\":\"id\",\"type\":\"bytes4\"},{\"indexed\":false,\"internalType\":\"string\",\"name\":\"name\",\"type\":\"string\"},{\"indexed\":false,\"internalType\":\"enumCompoundKeyKind\",\"name\":\"keyKind\",\"type\":\"uint8\"}],\"name\":\"NodeTypeRegister\",\"type\":\"event\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":false,\"internalType\":\"bytes\",\"name\":\"sig\",\"type\":\"bytes\"}],\"name\":\"SeenOpSet\",\"type\":\"event\"},{\"inputs\":[{\"internalType\":\"bytes24\",\"name\":\"nodeID\",\"type\":\"bytes24\"},{\"internalType\":\"string\",\"name\":\"label\",\"type\":\"string\"},{\"internalType\":\"string\",\"name\":\"annotationData\",\"type\":\"string\"}],\"name\":\"annotate\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"addr\",\"type\":\"address\"}],\"name\":\"authorizeContract\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"bytes4\",\"name\":\"relID\",\"type\":\"bytes4\"},{\"internalType\":\"uint8\",\"name\":\"relKey\",\"type\":\"uint8\"},{\"internalType\":\"bytes24\",\"name\":\"srcNodeID\",\"type\":\"bytes24\"}],\"name\":\"get\",\"outputs\":[{\"internalType\":\"bytes24\",\"name\":\"dstNodeId\",\"type\":\"bytes24\"},{\"internalType\":\"uint64\",\"name\":\"weight\",\"type\":\"uint64\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"bytes24\",\"name\":\"nodeID\",\"type\":\"bytes24\"},{\"internalType\":\"string\",\"name\":\"annotationLabel\",\"type\":\"string\"}],\"name\":\"getData\",\"outputs\":[{\"internalType\":\"bytes32\",\"name\":\"\",\"type\":\"bytes32\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"bytes4\",\"name\":\"relID\",\"type\":\"bytes4\"},{\"internalType\":\"string\",\"name\":\"relName\",\"type\":\"string\"},{\"internalType\":\"enumWeightKind\",\"name\":\"weightKind\",\"type\":\"uint8\"}],\"name\":\"registerEdgeType\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"bytes4\",\"name\":\"kindID\",\"type\":\"bytes4\"},{\"internalType\":\"string\",\"name\":\"kindName\",\"type\":\"string\"},{\"internalType\":\"enumCompoundKeyKind\",\"name\":\"keyKind\",\"type\":\"uint8\"}],\"name\":\"registerNodeType\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"bytes4\",\"name\":\"relID\",\"type\":\"bytes4\"},{\"internalType\":\"uint8\",\"name\":\"relKey\",\"type\":\"uint8\"},{\"internalType\":\"bytes24\",\"name\":\"srcNodeID\",\"type\":\"bytes24\"}],\"name\":\"remove\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"bytes4\",\"name\":\"relID\",\"type\":\"bytes4\"},{\"internalType\":\"uint8\",\"name\":\"relKey\",\"type\":\"uint8\"},{\"internalType\":\"bytes24\",\"name\":\"srcNodeID\",\"type\":\"bytes24\"},{\"internalType\":\"bytes24\",\"name\":\"dstNodeID\",\"type\":\"bytes24\"},{\"internalType\":\"uint64\",\"name\":\"weight\",\"type\":\"uint64\"}],\"name\":\"set\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"bytes24\",\"name\":\"nodeID\",\"type\":\"bytes24\"},{\"internalType\":\"string\",\"name\":\"label\",\"type\":\"string\"},{\"internalType\":\"bytes32\",\"name\":\"data\",\"type\":\"bytes32\"}],\"name\":\"setData\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"}]",
 }
 
 // StateABI is the input ABI used to generate the binding from.
@@ -135,11 +134,11 @@ func NewStateFilterer(address common.Address, filterer bind.ContractFilterer) (*
 
 // bindState binds a generic wrapper to an already deployed contract.
 func bindState(address common.Address, caller bind.ContractCaller, transactor bind.ContractTransactor, filterer bind.ContractFilterer) (*bind.BoundContract, error) {
-	parsed, err := StateMetaData.GetAbi()
+	parsed, err := abi.JSON(strings.NewReader(StateABI))
 	if err != nil {
 		return nil, err
 	}
-	return bind.NewBoundContract(address, *parsed, caller, transactor, filterer), nil
+	return bind.NewBoundContract(address, parsed, caller, transactor, filterer), nil
 }
 
 // Call invokes the (constant) contract method with params as input values and
@@ -223,6 +222,37 @@ func (_State *StateCallerSession) Get(relID [4]byte, relKey uint8, srcNodeID [24
 	Weight    uint64
 }, error) {
 	return _State.Contract.Get(&_State.CallOpts, relID, relKey, srcNodeID)
+}
+
+// GetData is a free data retrieval call binding the contract method 0x24eae355.
+//
+// Solidity: function getData(bytes24 nodeID, string annotationLabel) view returns(bytes32)
+func (_State *StateCaller) GetData(opts *bind.CallOpts, nodeID [24]byte, annotationLabel string) ([32]byte, error) {
+	var out []interface{}
+	err := _State.contract.Call(opts, &out, "getData", nodeID, annotationLabel)
+
+	if err != nil {
+		return *new([32]byte), err
+	}
+
+	out0 := *abi.ConvertType(out[0], new([32]byte)).(*[32]byte)
+
+	return out0, err
+
+}
+
+// GetData is a free data retrieval call binding the contract method 0x24eae355.
+//
+// Solidity: function getData(bytes24 nodeID, string annotationLabel) view returns(bytes32)
+func (_State *StateSession) GetData(nodeID [24]byte, annotationLabel string) ([32]byte, error) {
+	return _State.Contract.GetData(&_State.CallOpts, nodeID, annotationLabel)
+}
+
+// GetData is a free data retrieval call binding the contract method 0x24eae355.
+//
+// Solidity: function getData(bytes24 nodeID, string annotationLabel) view returns(bytes32)
+func (_State *StateCallerSession) GetData(nodeID [24]byte, annotationLabel string) ([32]byte, error) {
+	return _State.Contract.GetData(&_State.CallOpts, nodeID, annotationLabel)
 }
 
 // Annotate is a paid mutator transaction binding the contract method 0xff271d48.
@@ -349,6 +379,27 @@ func (_State *StateSession) Set(relID [4]byte, relKey uint8, srcNodeID [24]byte,
 // Solidity: function set(bytes4 relID, uint8 relKey, bytes24 srcNodeID, bytes24 dstNodeID, uint64 weight) returns()
 func (_State *StateTransactorSession) Set(relID [4]byte, relKey uint8, srcNodeID [24]byte, dstNodeID [24]byte, weight uint64) (*types.Transaction, error) {
 	return _State.Contract.Set(&_State.TransactOpts, relID, relKey, srcNodeID, dstNodeID, weight)
+}
+
+// SetData is a paid mutator transaction binding the contract method 0x7aaee0d0.
+//
+// Solidity: function setData(bytes24 nodeID, string label, bytes32 data) returns()
+func (_State *StateTransactor) SetData(opts *bind.TransactOpts, nodeID [24]byte, label string, data [32]byte) (*types.Transaction, error) {
+	return _State.contract.Transact(opts, "setData", nodeID, label, data)
+}
+
+// SetData is a paid mutator transaction binding the contract method 0x7aaee0d0.
+//
+// Solidity: function setData(bytes24 nodeID, string label, bytes32 data) returns()
+func (_State *StateSession) SetData(nodeID [24]byte, label string, data [32]byte) (*types.Transaction, error) {
+	return _State.Contract.SetData(&_State.TransactOpts, nodeID, label, data)
+}
+
+// SetData is a paid mutator transaction binding the contract method 0x7aaee0d0.
+//
+// Solidity: function setData(bytes24 nodeID, string label, bytes32 data) returns()
+func (_State *StateTransactorSession) SetData(nodeID [24]byte, label string, data [32]byte) (*types.Transaction, error) {
+	return _State.Contract.SetData(&_State.TransactOpts, nodeID, label, data)
 }
 
 // StateAnnotationSetIterator is returned from FilterAnnotationSet and is used to iterate over the raw logs and unpacked data for AnnotationSet events raised by the State contract.
@@ -483,6 +534,142 @@ func (_State *StateFilterer) WatchAnnotationSet(opts *bind.WatchOpts, sink chan<
 func (_State *StateFilterer) ParseAnnotationSet(log types.Log) (*StateAnnotationSet, error) {
 	event := new(StateAnnotationSet)
 	if err := _State.contract.UnpackLog(event, "AnnotationSet", log); err != nil {
+		return nil, err
+	}
+	event.Raw = log
+	return event, nil
+}
+
+// StateDataSetIterator is returned from FilterDataSet and is used to iterate over the raw logs and unpacked data for DataSet events raised by the State contract.
+type StateDataSetIterator struct {
+	Event *StateDataSet // Event containing the contract specifics and raw log
+
+	contract *bind.BoundContract // Generic contract to use for unpacking event data
+	event    string              // Event name to use for unpacking event data
+
+	logs chan types.Log        // Log channel receiving the found contract events
+	sub  ethereum.Subscription // Subscription for errors, completion and termination
+	done bool                  // Whether the subscription completed delivering logs
+	fail error                 // Occurred error to stop iteration
+}
+
+// Next advances the iterator to the subsequent event, returning whether there
+// are any more events found. In case of a retrieval or parsing error, false is
+// returned and Error() can be queried for the exact failure.
+func (it *StateDataSetIterator) Next() bool {
+	// If the iterator failed, stop iterating
+	if it.fail != nil {
+		return false
+	}
+	// If the iterator completed, deliver directly whatever's available
+	if it.done {
+		select {
+		case log := <-it.logs:
+			it.Event = new(StateDataSet)
+			if err := it.contract.UnpackLog(it.Event, it.event, log); err != nil {
+				it.fail = err
+				return false
+			}
+			it.Event.Raw = log
+			return true
+
+		default:
+			return false
+		}
+	}
+	// Iterator still in progress, wait for either a data or an error event
+	select {
+	case log := <-it.logs:
+		it.Event = new(StateDataSet)
+		if err := it.contract.UnpackLog(it.Event, it.event, log); err != nil {
+			it.fail = err
+			return false
+		}
+		it.Event.Raw = log
+		return true
+
+	case err := <-it.sub.Err():
+		it.done = true
+		it.fail = err
+		return it.Next()
+	}
+}
+
+// Error returns any retrieval or parsing error occurred during filtering.
+func (it *StateDataSetIterator) Error() error {
+	return it.fail
+}
+
+// Close terminates the iteration process, releasing any pending underlying
+// resources.
+func (it *StateDataSetIterator) Close() error {
+	it.sub.Unsubscribe()
+	return nil
+}
+
+// StateDataSet represents a DataSet event raised by the State contract.
+type StateDataSet struct {
+	Id    [24]byte
+	Label string
+	Data  [32]byte
+	Raw   types.Log // Blockchain specific contextual infos
+}
+
+// FilterDataSet is a free log retrieval operation binding the contract event 0x2a5c5e9f907f04c94740d47644d64436febf791f548ed4cc4d42de0c27967fbb.
+//
+// Solidity: event DataSet(bytes24 id, string label, bytes32 data)
+func (_State *StateFilterer) FilterDataSet(opts *bind.FilterOpts) (*StateDataSetIterator, error) {
+
+	logs, sub, err := _State.contract.FilterLogs(opts, "DataSet")
+	if err != nil {
+		return nil, err
+	}
+	return &StateDataSetIterator{contract: _State.contract, event: "DataSet", logs: logs, sub: sub}, nil
+}
+
+// WatchDataSet is a free log subscription operation binding the contract event 0x2a5c5e9f907f04c94740d47644d64436febf791f548ed4cc4d42de0c27967fbb.
+//
+// Solidity: event DataSet(bytes24 id, string label, bytes32 data)
+func (_State *StateFilterer) WatchDataSet(opts *bind.WatchOpts, sink chan<- *StateDataSet) (event.Subscription, error) {
+
+	logs, sub, err := _State.contract.WatchLogs(opts, "DataSet")
+	if err != nil {
+		return nil, err
+	}
+	return event.NewSubscription(func(quit <-chan struct{}) error {
+		defer sub.Unsubscribe()
+		for {
+			select {
+			case log := <-logs:
+				// New log arrived, parse the event and forward to the user
+				event := new(StateDataSet)
+				if err := _State.contract.UnpackLog(event, "DataSet", log); err != nil {
+					return err
+				}
+				event.Raw = log
+
+				select {
+				case sink <- event:
+				case err := <-sub.Err():
+					return err
+				case <-quit:
+					return nil
+				}
+			case err := <-sub.Err():
+				return err
+			case <-quit:
+				return nil
+			}
+		}
+	}), nil
+}
+
+// ParseDataSet is a log parse operation binding the contract event 0x2a5c5e9f907f04c94740d47644d64436febf791f548ed4cc4d42de0c27967fbb.
+//
+// Solidity: event DataSet(bytes24 id, string label, bytes32 data)
+func (_State *StateFilterer) ParseDataSet(log types.Log) (*StateDataSet, error) {
+	event := new(StateDataSet)
+	if err := _State.contract.UnpackLog(event, "DataSet", log); err != nil {
 		return nil, err
 	}
 	event.Raw = log

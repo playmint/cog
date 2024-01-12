@@ -145,9 +145,11 @@ type ComplexityRoot struct {
 	}
 
 	Node struct {
+		AllData     func(childComplexity int) int
 		Annotation  func(childComplexity int, name string) int
 		Annotations func(childComplexity int) int
 		Count       func(childComplexity int, match *model.Match) int
+		Data        func(childComplexity int, name string) int
 		Edge        func(childComplexity int, match *model.Match) int
 		Edges       func(childComplexity int, match *model.Match) int
 		ID          func(childComplexity int) int
@@ -158,6 +160,12 @@ type ComplexityRoot struct {
 		Nodes       func(childComplexity int, match *model.Match) int
 		Sum         func(childComplexity int, match *model.Match) int
 		Value       func(childComplexity int, match *model.Match) int
+	}
+
+	NodeData struct {
+		ID    func(childComplexity int) int
+		Name  func(childComplexity int) int
+		Value func(childComplexity int) int
 	}
 
 	Query struct {
@@ -674,6 +682,13 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 
 		return e.complexity.Mutation.Signup(childComplexity, args["gameID"].(string), args["authorization"].(string)), true
 
+	case "Node.allData":
+		if e.complexity.Node.AllData == nil {
+			break
+		}
+
+		return e.complexity.Node.AllData(childComplexity), true
+
 	case "Node.annotation":
 		if e.complexity.Node.Annotation == nil {
 			break
@@ -704,6 +719,18 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 		}
 
 		return e.complexity.Node.Count(childComplexity, args["match"].(*model.Match)), true
+
+	case "Node.data":
+		if e.complexity.Node.Data == nil {
+			break
+		}
+
+		args, err := ec.field_Node_data_args(context.TODO(), rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Node.Data(childComplexity, args["name"].(string)), true
 
 	case "Node.edge":
 		if e.complexity.Node.Edge == nil {
@@ -804,6 +831,27 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 		}
 
 		return e.complexity.Node.Value(childComplexity, args["match"].(*model.Match)), true
+
+	case "NodeData.id":
+		if e.complexity.NodeData.ID == nil {
+			break
+		}
+
+		return e.complexity.NodeData.ID(childComplexity), true
+
+	case "NodeData.name":
+		if e.complexity.NodeData.Name == nil {
+			break
+		}
+
+		return e.complexity.NodeData.Name(childComplexity), true
+
+	case "NodeData.value":
+		if e.complexity.NodeData.Value == nil {
+			break
+		}
+
+		return e.complexity.NodeData.Value(childComplexity), true
 
 	case "Query.game":
 		if e.complexity.Query.Game == nil {
@@ -1336,6 +1384,12 @@ type Node {
 	annotation(name: String!): Annotation
 
 	"""
+	allData is the store of on-chain 32byte key value pairs belonging to the node
+	"""
+	allData: [NodeData]!
+	data(name: String!): NodeData
+
+	"""
 	nodes have a "kind" label, it is the human friendly decoding of the first 4
 	bytes of the id. See ` + "`" + `id` + "`" + ` and ` + "`" + `keys` + "`" + `. This value is discovered based on the
 	value set on the state contract via registerNodeType.
@@ -1493,6 +1547,15 @@ usually cost-effective for an equivilent value stored in state.
 type Annotation {
 	id: ID!
 	ref: String!
+	name: String!
+	value: String!
+}
+
+"""
+node data is an on-chain 32byte value stored as a key value pair for a given node
+"""
+type NodeData {
+	id: ID!
 	name: String!
 	value: String!
 }
@@ -1731,6 +1794,21 @@ func (ec *executionContext) field_Node_count_args(ctx context.Context, rawArgs m
 		}
 	}
 	args["match"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Node_data_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
+	var err error
+	args := map[string]interface{}{}
+	var arg0 string
+	if tmp, ok := rawArgs["name"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("name"))
+		arg0, err = ec.unmarshalNString2string(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["name"] = arg0
 	return args, nil
 }
 
@@ -4263,6 +4341,80 @@ func (ec *executionContext) _Node_annotation(ctx context.Context, field graphql.
 	return ec.marshalOAnnotation2ᚖgithubᚗcomᚋplaymintᚋdsᚑnodeᚋpkgᚋapiᚋmodelᚐAnnotation(ctx, field.Selections, res)
 }
 
+func (ec *executionContext) _Node_allData(ctx context.Context, field graphql.CollectedField, obj *model.Node) (ret graphql.Marshaler) {
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	fc := &graphql.FieldContext{
+		Object:     "Node",
+		Field:      field,
+		Args:       nil,
+		IsMethod:   true,
+		IsResolver: false,
+	}
+
+	ctx = graphql.WithFieldContext(ctx, fc)
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.AllData(), nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.([]*model.NodeData)
+	fc.Result = res
+	return ec.marshalNNodeData2ᚕᚖgithubᚗcomᚋplaymintᚋdsᚑnodeᚋpkgᚋapiᚋmodelᚐNodeData(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) _Node_data(ctx context.Context, field graphql.CollectedField, obj *model.Node) (ret graphql.Marshaler) {
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	fc := &graphql.FieldContext{
+		Object:     "Node",
+		Field:      field,
+		Args:       nil,
+		IsMethod:   true,
+		IsResolver: false,
+	}
+
+	ctx = graphql.WithFieldContext(ctx, fc)
+	rawArgs := field.ArgumentMap(ec.Variables)
+	args, err := ec.field_Node_data_args(ctx, rawArgs)
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	fc.Args = args
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Data(args["name"].(string)), nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		return graphql.Null
+	}
+	res := resTmp.(*model.NodeData)
+	fc.Result = res
+	return ec.marshalONodeData2ᚖgithubᚗcomᚋplaymintᚋdsᚑnodeᚋpkgᚋapiᚋmodelᚐNodeData(ctx, field.Selections, res)
+}
+
 func (ec *executionContext) _Node_kind(ctx context.Context, field graphql.CollectedField, obj *model.Node) (ret graphql.Marshaler) {
 	defer func() {
 		if r := recover(); r != nil {
@@ -4581,6 +4733,111 @@ func (ec *executionContext) _Node_count(ctx context.Context, field graphql.Colle
 	res := resTmp.(int)
 	fc.Result = res
 	return ec.marshalNInt2int(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) _NodeData_id(ctx context.Context, field graphql.CollectedField, obj *model.NodeData) (ret graphql.Marshaler) {
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	fc := &graphql.FieldContext{
+		Object:     "NodeData",
+		Field:      field,
+		Args:       nil,
+		IsMethod:   false,
+		IsResolver: false,
+	}
+
+	ctx = graphql.WithFieldContext(ctx, fc)
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.ID, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(string)
+	fc.Result = res
+	return ec.marshalNID2string(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) _NodeData_name(ctx context.Context, field graphql.CollectedField, obj *model.NodeData) (ret graphql.Marshaler) {
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	fc := &graphql.FieldContext{
+		Object:     "NodeData",
+		Field:      field,
+		Args:       nil,
+		IsMethod:   false,
+		IsResolver: false,
+	}
+
+	ctx = graphql.WithFieldContext(ctx, fc)
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Name, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(string)
+	fc.Result = res
+	return ec.marshalNString2string(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) _NodeData_value(ctx context.Context, field graphql.CollectedField, obj *model.NodeData) (ret graphql.Marshaler) {
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	fc := &graphql.FieldContext{
+		Object:     "NodeData",
+		Field:      field,
+		Args:       nil,
+		IsMethod:   false,
+		IsResolver: false,
+	}
+
+	ctx = graphql.WithFieldContext(ctx, fc)
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Value, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(string)
+	fc.Result = res
+	return ec.marshalNString2string(ctx, field.Selections, res)
 }
 
 func (ec *executionContext) _Query_game(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
@@ -7666,6 +7923,23 @@ func (ec *executionContext) _Node(ctx context.Context, sel ast.SelectionSet, obj
 
 			out.Values[i] = innerFunc(ctx)
 
+		case "allData":
+			innerFunc := func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Node_allData(ctx, field, obj)
+			}
+
+			out.Values[i] = innerFunc(ctx)
+
+			if out.Values[i] == graphql.Null {
+				invalids++
+			}
+		case "data":
+			innerFunc := func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Node_data(ctx, field, obj)
+			}
+
+			out.Values[i] = innerFunc(ctx)
+
 		case "kind":
 			innerFunc := func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Node_kind(ctx, field, obj)
@@ -7730,6 +8004,57 @@ func (ec *executionContext) _Node(ctx context.Context, sel ast.SelectionSet, obj
 		case "count":
 			innerFunc := func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Node_count(ctx, field, obj)
+			}
+
+			out.Values[i] = innerFunc(ctx)
+
+			if out.Values[i] == graphql.Null {
+				invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch()
+	if invalids > 0 {
+		return graphql.Null
+	}
+	return out
+}
+
+var nodeDataImplementors = []string{"NodeData"}
+
+func (ec *executionContext) _NodeData(ctx context.Context, sel ast.SelectionSet, obj *model.NodeData) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, nodeDataImplementors)
+	out := graphql.NewFieldSet(fields)
+	var invalids uint32
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("NodeData")
+		case "id":
+			innerFunc := func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._NodeData_id(ctx, field, obj)
+			}
+
+			out.Values[i] = innerFunc(ctx)
+
+			if out.Values[i] == graphql.Null {
+				invalids++
+			}
+		case "name":
+			innerFunc := func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._NodeData_name(ctx, field, obj)
+			}
+
+			out.Values[i] = innerFunc(ctx)
+
+			if out.Values[i] == graphql.Null {
+				invalids++
+			}
+		case "value":
+			innerFunc := func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._NodeData_value(ctx, field, obj)
 			}
 
 			out.Values[i] = innerFunc(ctx)
@@ -9034,6 +9359,44 @@ func (ec *executionContext) marshalNNode2ᚖgithubᚗcomᚋplaymintᚋdsᚑnode�
 	return ec._Node(ctx, sel, v)
 }
 
+func (ec *executionContext) marshalNNodeData2ᚕᚖgithubᚗcomᚋplaymintᚋdsᚑnodeᚋpkgᚋapiᚋmodelᚐNodeData(ctx context.Context, sel ast.SelectionSet, v []*model.NodeData) graphql.Marshaler {
+	ret := make(graphql.Array, len(v))
+	var wg sync.WaitGroup
+	isLen1 := len(v) == 1
+	if !isLen1 {
+		wg.Add(len(v))
+	}
+	for i := range v {
+		i := i
+		fc := &graphql.FieldContext{
+			Index:  &i,
+			Result: &v[i],
+		}
+		ctx := graphql.WithFieldContext(ctx, fc)
+		f := func(i int) {
+			defer func() {
+				if r := recover(); r != nil {
+					ec.Error(ctx, ec.Recover(ctx, r))
+					ret = nil
+				}
+			}()
+			if !isLen1 {
+				defer wg.Done()
+			}
+			ret[i] = ec.marshalONodeData2ᚖgithubᚗcomᚋplaymintᚋdsᚑnodeᚋpkgᚋapiᚋmodelᚐNodeData(ctx, sel, v[i])
+		}
+		if isLen1 {
+			f(i)
+		} else {
+			go f(i)
+		}
+
+	}
+	wg.Wait()
+
+	return ret
+}
+
 func (ec *executionContext) unmarshalNRelMatch2ᚖgithubᚗcomᚋplaymintᚋdsᚑnodeᚋpkgᚋapiᚋmodelᚐRelMatch(ctx context.Context, v interface{}) (*model.RelMatch, error) {
 	res, err := ec.unmarshalInputRelMatch(ctx, v)
 	return &res, graphql.ErrorOnPath(ctx, err)
@@ -9600,6 +9963,13 @@ func (ec *executionContext) marshalONode2ᚖgithubᚗcomᚋplaymintᚋdsᚑnode�
 		return graphql.Null
 	}
 	return ec._Node(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalONodeData2ᚖgithubᚗcomᚋplaymintᚋdsᚑnodeᚋpkgᚋapiᚋmodelᚐNodeData(ctx context.Context, sel ast.SelectionSet, v *model.NodeData) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return ec._NodeData(ctx, sel, v)
 }
 
 func (ec *executionContext) unmarshalORelMatch2ᚕᚖgithubᚗcomᚋplaymintᚋdsᚑnodeᚋpkgᚋapiᚋmodelᚐRelMatchᚄ(ctx context.Context, v interface{}) ([]*model.RelMatch, error) {
