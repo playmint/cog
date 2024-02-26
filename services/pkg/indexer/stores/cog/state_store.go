@@ -72,6 +72,7 @@ func (rs *StateStore) processBlock(ctx context.Context, block *eventwatcher.LogB
 		g = model.NewGraph(0)
 	}
 
+	execOps := 0
 	seenOps := map[string]bool{}
 	for _, rawEvent := range block.Logs {
 		if rawEvent.Removed {
@@ -97,6 +98,7 @@ func (rs *StateStore) processBlock(ctx context.Context, block *eventwatcher.LogB
 			if err != nil {
 				rs.log.Error().Err(err).Msgf("failed process %T event", evt)
 			}
+			execOps++
 		case "DataSet":
 			var evt state.StateDataSet
 			if err := unpackLog(rs.abi, &evt, eventABI.RawName, rawEvent); err != nil {
@@ -108,6 +110,7 @@ func (rs *StateStore) processBlock(ctx context.Context, block *eventwatcher.LogB
 			if err != nil {
 				rs.log.Error().Err(err).Msgf("failed process %T event", evt)
 			}
+			execOps++
 		case "EdgeSet":
 			var evt state.StateEdgeSet
 			if err := unpackLog(rs.abi, &evt, eventABI.RawName, rawEvent); err != nil {
@@ -119,6 +122,7 @@ func (rs *StateStore) processBlock(ctx context.Context, block *eventwatcher.LogB
 			if err != nil {
 				rs.log.Error().Err(err).Msgf("failed process %T event", evt)
 			}
+			execOps++
 		case "EdgeRemove":
 			var evt state.StateEdgeRemove
 			if err := unpackLog(rs.abi, &evt, eventABI.RawName, rawEvent); err != nil {
@@ -130,6 +134,7 @@ func (rs *StateStore) processBlock(ctx context.Context, block *eventwatcher.LogB
 			if err != nil {
 				rs.log.Error().Err(err).Msgf("failed process %T event", evt)
 			}
+			execOps++
 		case "NodeTypeRegister":
 			var evt state.StateNodeTypeRegister
 			if err := unpackLog(rs.abi, &evt, eventABI.RawName, rawEvent); err != nil {
@@ -141,6 +146,7 @@ func (rs *StateStore) processBlock(ctx context.Context, block *eventwatcher.LogB
 			if err != nil {
 				rs.log.Error().Err(err).Msgf("failed process %T event", evt)
 			}
+			execOps++
 		case "SeenOpSet":
 			var evt state.StateSeenOpSet
 			if err := unpackLog(rs.abi, &evt, eventABI.RawName, rawEvent); err != nil {
@@ -148,6 +154,7 @@ func (rs *StateStore) processBlock(ctx context.Context, block *eventwatcher.LogB
 				continue
 			}
 			seenOps[hexutil.Encode(evt.Sig)] = true
+			execOps++
 		case "EdgeTypeRegister":
 			var evt state.StateEdgeTypeRegister
 			if err := unpackLog(rs.abi, &evt, eventABI.RawName, rawEvent); err != nil {
@@ -159,6 +166,7 @@ func (rs *StateStore) processBlock(ctx context.Context, block *eventwatcher.LogB
 			if err != nil {
 				rs.log.Error().Err(err).Msgf("failed process %T event", evt)
 			}
+			execOps++
 		default:
 			rs.log.Warn().Msgf("ignoring unhandled event type %v", eventABI)
 		}
@@ -177,6 +185,13 @@ func (rs *StateStore) processBlock(ctx context.Context, block *eventwatcher.LogB
 		sigs = append(sigs, sig)
 	}
 	rs.Notify(int(block.ToBlock), sigs, false)
+
+	// send a notification that the pendingops have been rebased on the latest
+	// block state, but only if something has actually changed, not every block
+	if execOps > 0 {
+		rs.Notify(int(block.ToBlock), []string{"PENDING"}, true)
+	}
+
 }
 
 func (rs *StateStore) Notify(blockNumber int, sigs []string, simulated bool) {
