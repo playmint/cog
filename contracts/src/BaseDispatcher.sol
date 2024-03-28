@@ -66,7 +66,7 @@ contract BaseDispatcher is Dispatcher {
 
     function dispatch(bytes calldata action, Context calldata ctx) public returns (Op[] memory) {
         uint256 fromHead = state.getHead();
-        // check ctx can be trusted
+        // check ctx can be trusted.
         // we trust ctx built from ourself see the dispatch(action) function above that builds a full-access session for the msg.sender
         // we trust ctx built from any registered routers
         if (!isRegisteredRouter(msg.sender)) {
